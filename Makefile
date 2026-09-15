@@ -1,0 +1,75 @@
+# VoidGate
+CC      ?= gcc
+CLANG   ?= clang
+LLVM_STRIP ?= llvm-strip
+BPFTOOL ?= bpftool
+
+PREFIX  ?= /usr/local
+ARCH    := $(shell uname -m | sed 's/x86_64/x86/' | sed 's/aarch64/arm64/')
+
+SRC     := src
+BPFDIR  := src/bpf
+CFLAGS  := -O2 -g -Wall -Wextra -Wno-unused-parameter -I$(SRC) -I$(BPFDIR)
+LDFLAGS := -lbpf -lelf -lz
+BPF_CFLAGS := -O2 -g -target bpf -D__TARGET_ARCH_$(ARCH) \
+	-I$(SRC) -I$(BPFDIR) \
+	-Wall -Wno-unused-value -Wno-pointer-sign \
+	-Wno-compare-distinct-pointer-types \
+	-isystem /usr/include/$(shell dpkg-architecture \
+		-qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)
+
+USER_OBJS := src/voidgate.o src/config.o src/policy.o src/maps.o src/ipaddr.o
+CTL_OBJS  := src/voidgatectl.o
+TEST_OBJS := tests/test_xdp.o src/ipaddr.o src/config.o
+
+.PHONY: all clean install test
+
+all: voidgate voidgatectl tests/test_xdp tests/test_policy
+
+$(BPFDIR)/voidgate.bpf.o: $(BPFDIR)/voidgate.bpf.c $(BPFDIR)/voidgate.h
+	$(CLANG) $(BPF_CFLAGS) -c $< -o $@
+	$(LLVM_STRIP) -g $@
+
+$(BPFDIR)/voidgate.skel.h: $(BPFDIR)/voidgate.bpf.o
+	$(BPFTOOL) gen skeleton $< > $@
+
+src/voidgate.o src/maps.o src/policy.o tests/test_xdp.o: \
+	$(BPFDIR)/voidgate.skel.h
+
+src/%.o: src/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+tests/%.o: tests/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+voidgate: $(USER_OBJS)
+	$(CC) $(CFLAGS) -o $@ $(USER_OBJS) $(LDFLAGS)
+
+voidgatectl: $(CTL_OBJS)
+	$(CC) $(CFLAGS) -o $@ $(CTL_OBJS)
+
+tests/test_xdp: tests/test_xdp.o src/ipaddr.o src/config.o
+	$(CC) $(CFLAGS) -o $@ tests/test_xdp.o src/ipaddr.o src/config.o $(LDFLAGS)
+
+tests/test_policy: tests/test_policy.c src/policy.c src/policy.h \
+	src/config.o src/ipaddr.o
+	$(CC) $(CFLAGS) -DVG_CTRL_TEST -o $@ tests/test_policy.c \
+		src/policy.c src/config.o src/ipaddr.o
+
+test: tests/test_xdp tests/test_policy
+	./tests/test_policy
+	sudo ./tests/test_xdp
+	sudo tests/test_netns.sh
+
+clean:
+	rm -f voidgate voidgatectl tests/test_xdp tests/test_policy \
+		src/*.o tests/*.o $(BPFDIR)/voidgate.bpf.o $(BPFDIR)/voidgate.skel.h
+
+install: all
+	install -d $(DESTDIR)$(PREFIX)/sbin
+	install -m 0755 voidgate voidgatectl $(DESTDIR)$(PREFIX)/sbin/
+	install -d $(DESTDIR)/etc/voidgate
+	install -m 0644 configs/voidgate.conf $(DESTDIR)/etc/voidgate/voidgate.conf
+	install -d $(DESTDIR)/lib/systemd/system
+	install -m 0644 systemd/voidgate.service \
+		$(DESTDIR)/lib/systemd/system/voidgate.service

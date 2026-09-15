@@ -1,0 +1,16 @@
+[Unit]
+Description=VoidGate XDP DDoS gate
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/voidgate -c /etc/voidgate/voidgate.conf
+Restart=on-failure
+RestartSec=2
+AmbientCapabilities=CAP_BPF CAP_NET_ADMIN CAP_PERFMON
+CapabilityBoundingSet=CAP_BPF CAP_NET_ADMIN CAP_PERFMON CAP_DAC_OVERRIDE
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target
