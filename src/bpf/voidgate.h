@@ -51,14 +51,15 @@ struct host_counters {
 };
 
 
+/* Per-CPU; userspace sums CPUs in vg_metrics_read. */
 struct vg_metrics {
-    __u64  rx_pkts;
-    __u64  rx_bytes;
-    __u64  passed;
-    __u64  dropped;
-    __u64  non_ip;
-    __u64  map_full;
-    __u64  parse_err;
+    __u64  rx_pkts;    /* packets seen, idle and armed */
+    __u64  rx_bytes;   /* L2 bytes of rx_pkts */
+    __u64  passed;     /* XDP_PASS via pass(); not parse_fail */
+    __u64  dropped;    /* XDP_DROP from drop LPM */
+    __u64  non_ip;     /* armed, not IPv4/IPv6 */
+    __u64  map_full;   /* host/remote hash insert failed */
+    __u64  parse_err;  /* bad header; XDP_PASS, not passed++ */
 };
 
 
