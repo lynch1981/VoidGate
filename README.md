@@ -1,12 +1,19 @@
 # VoidGate
 
-XDP DDoS gate for a single Linux VM. Silent unless the instance is under attack.
+Multi-layer XDP shield for a single Linux VM. Silent unless the instance
+is under attack.
 
-VoidGate is not FastNetMon. There is no NetFlow, sFlow, AF_PACKET, or
-AF_XDP. Packets are not redirected to userspace. The XDP program either
-`XDP_PASS` or `XDP_DROP`. Userspace is the control plane: it watches
-coarse rx rates, and only when the NIC is flooded does it arm the gate,
-count sources, and install CIDRs into a BPF LPM drop tree.
+Website: [https://lynch1981.github.io/VoidGate/](https://lynch1981.github.io/VoidGate/).
+Source is [`docs/`](docs/). Enable once in the GitHub UI: Settings → Pages →
+Deploy from a branch → `main` / `/docs`.
+
+Watch the NIC idle, keep the VM reachable, cut attacker hosts, then
+widen to `/24` or `/64` when the cluster is dense. There is no NetFlow,
+sFlow, AF_PACKET, or AF_XDP. Packets are not redirected to userspace.
+The XDP program either `XDP_PASS` or `XDP_DROP`. Userspace is the
+control plane: it watches coarse rx rates, and only when the NIC is
+flooded does it arm the gate, count sources, and install CIDRs into a
+BPF LPM drop tree.
 
 ```
 IDLE  ── wake_pps / wake_mbps ──► ACTIVE ── quiet clear_seconds ──► IDLE

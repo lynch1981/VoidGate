@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>VoidGate — multi-layer XDP shield</title>
+    <meta name="description" content="Multi-layer XDP shield for a single Linux VM. Silent unless the instance is under attack. XDP_PASS or XDP_DROP only.">
+    <meta name="theme-color" content="#05060a">
+    <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+    <link rel="canonical" href="https://lynch1981.github.io/VoidGate/">
+    <meta property="og:title" content="VoidGate">
+    <meta property="og:description" content="Multi-layer XDP shield for one Linux VM. Silent unless the instance is under attack.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://lynch1981.github.io/VoidGate/">
+    <link rel="preload" href="fonts/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/ibm-plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header">
+        <div class="wrap header-inner">
+            <a class="brand" href="index.html">
+                <img src="img/mark.svg" width="22" height="22" alt="">
+                VoidGate
+            </a>
+            <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
+            <nav id="site-nav" class="site-nav">
+                <a href="architecture.html">Architecture</a>
+                <a href="install.html">Install</a>
+                <a href="operations.html">Operations</a>
+                <a class="nav-ext" href="https://github.com/lynch1981/VoidGate">GitHub</a>
+            </nav>
+        </div>
+    </header>
+
+    <main id="main">
+        <section class="hero wrap">
+            <p class="kicker">XDP · multi-layer shield · idle until the NIC is on fire</p>
+            <h1 class="display">VoidGate</h1>
+            <p class="lede">A multi-layer XDP shield for a single Linux VM. Silent unless the instance is under attack. Packets stay in the kernel: <code>XDP_PASS</code> or <code>XDP_DROP</code>. IPv4 and IPv6 together.</p>
+            <div class="hero-actions">
+                <a class="btn btn-pass" href="install.html">Build &amp; run</a>
+                <a class="btn btn-ghost" href="architecture.html">How it decides</a>
+            </div>
+        </section>
+
+        <div class="wrap">
+            <section class="datapath" data-gate tabindex="0" aria-label="Datapath visualization">
+                <div class="datapath-head">
+                    <div class="seg" role="tablist" aria-label="Gate state">
+                        <button type="button" role="tab" data-arm="0" aria-selected="true">Idle</button>
+                        <button type="button" role="tab" data-arm="1" aria-selected="false">Active</button>
+                    </div>
+                    <dl class="metrics">
+                        <div>
+                            <dt>cfg.armed</dt>
+                            <dd data-m="armed">0</dd>
+                        </div>
+                        <div>
+                            <dt>rx_pkts</dt>
+                            <dd data-m="rx">0</dd>
+                        </div>
+                        <div>
+                            <dt>passed</dt>
+                            <dd data-m="passed">0</dd>
+                        </div>
+                        <div>
+                            <dt>dropped</dt>
+                            <dd data-m="dropped">0</dd>
+                        </div>
+                    </dl>
+                </div>
+                <div class="datapath-body">
+                    <ol class="stages">
+                        <li data-stage="nic">NIC</li>
+                        <li data-stage="rx">rx++</li>
+                        <li data-stage="parse" class="armed-only">parse</li>
+                        <li data-stage="allow" class="armed-only">allow</li>
+                        <li data-stage="drop" class="armed-only">drop LPM</li>
+                        <li data-stage="count" class="armed-only">count</li>
+                        <li data-stage="pass" class="verdict pass">XDP_PASS</li>
+                        <li data-stage="dropv" class="verdict drop armed-only">XDP_DROP</li>
+                    </ol>
+                    <div class="datapath-lane" aria-hidden="true"></div>
+                </div>
+                <p class="datapath-note">On-page visualization of <code>voidgate.bpf.c</code>. Not live telemetry. Keys: I idle, A active.</p>
+            </section>
+        </div>
+
+        <section class="section wrap">
+            <div class="section-head">
+                <h2>What stays true</h2>
+                <span class="idx">01 / invariants</span>
+            </div>
+            <div class="facts">
+                <article class="fact">
+                    <p class="tag">Idle path</p>
+                    <h3>One load, then pass</h3>
+                    <p>If <code>cfg.armed == 0</code>, XDP does not parse Ethernet, does not LPM, and does not touch host or remote maps. Only <code>metrics.rx_*</code>, then <code>XDP_PASS</code>.</p>
+                </article>
+                <article class="fact">
+                    <p class="tag">Stay attached</p>
+                    <h3>Arming is a map write</h3>
+                    <p>XDP stays on the NIC in IDLE. <code>cfg.armed = 1</code> turns the gate on. Detach only on process exit — not every quiet cycle.</p>
+                </article>
+                <article class="fact">
+                    <p class="tag">Split brain</p>
+                    <h3>Userspace decides drops</h3>
+                    <p>Thresholds live in the control plane. The BPF program only looks prefixes up. Default verdict on a shared NIC is <code>XDP_PASS</code>.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="section wrap">
+            <div class="section-head">
+                <h2>Four layers</h2>
+                <span class="idx">02 / shield</span>
+            </div>
+            <p class="section-lede">One program, stacked. Watch first. Keep the VM reachable. Cut attacker hosts. Widen the prefix when the cluster is dense.</p>
+            <ol class="shield">
+                <li class="watch">
+                    <span class="layer-idx">01</span>
+                    <div>
+                        <h3>Watch</h3>
+                        <p>IDLE. XDP stays attached. Only <code>rx_*</code>, then <code>XDP_PASS</code> — no parse, no LPM. Arm on <code>wake_pps</code> / <code>wake_mbps</code>, or with <code>voidgatectl arm</code>.</p>
+                    </div>
+                </li>
+                <li class="keep">
+                    <span class="layer-idx">02</span>
+                    <div>
+                        <h3>Keep</h3>
+                        <p>Never drop the VM. Allow CIDRs, TCP <code>allow_ports</code> on the local side, DHCP 67/68 and 546/547, IPv6 NDP 133–137, <code>fe80::/10</code>, <code>ff02::/16</code>.</p>
+                    </div>
+                </li>
+                <li class="cut">
+                    <span class="layer-idx">03</span>
+                    <div>
+                        <h3>Cut</h3>
+                        <p>Drop LPM. Policy inserts a remote over threshold as <code>/32</code> or <code>/128</code>. <code>voidgatectl drop</code> is the same layer, and does not auto-expire.</p>
+                    </div>
+                </li>
+                <li class="widen">
+                    <span class="layer-idx">04</span>
+                    <div>
+                        <h3>Widen</h3>
+                        <p>When <code>aggregate_k</code> dropped hosts sit in one <code>/24</code> or <code>/64</code>, install that prefix. Policy and aggregate expire with <code>ban_time</code>.</p>
+                    </div>
+                </li>
+            </ol>
+            <ul class="nogo">
+                <li>No AF_XDP</li>
+                <li>No packet redirect to userspace</li>
+                <li>No NetFlow, sFlow, pcap, or AF_PACKET</li>
+                <li>No BGP</li>
+                <li>No promiscuous mode in v1</li>
+            </ul>
+        </section>
+
+        <section class="section wrap">
+            <div class="section-head">
+                <h2>State machine</h2>
+                <span class="idx">03 / idle ↔ active</span>
+            </div>
+            <div class="machine">
+                <article class="idle">
+                    <h3>Idle · armed = 0</h3>
+                    <p>XDP attached. Coarse rx counters only. Userspace polls <code>wake_pps</code> / <code>wake_mbps</code>.</p>
+                    <ul>
+                        <li>No drop tree</li>
+                        <li>No per-source maps written</li>
+                        <li><code>voidgatectl arm</code> forces ACTIVE</li>
+                    </ul>
+                </article>
+                <div class="arrows">
+                    <div>
+                        → ACTIVE
+                        <span>wake_pps / wake_mbps or ctl arm / drop</span>
+                    </div>
+                    <div>
+                        ← IDLE
+                        <span>quiet clear_seconds and empty drops</span>
+                    </div>
+                </div>
+                <article class="active">
+                    <h3>Active · armed = 1</h3>
+                    <p>Parse IPv4/IPv6. Whitelist. Drop LPM. Count local hosts and remote sources.</p>
+                    <ul>
+                        <li>Top remotes → <code>/32</code> or <code>/128</code></li>
+                        <li>Dense clusters → <code>/24</code> or <code>/64</code></li>
+                        <li><code>voidgatectl disarm</code> flushes drops</li>
+                    </ul>
+                </article>
+            </div>
+            <aside class="note idle">Disarm flushes <code>drop_*</code> only. Remote LRU maps are not wiped — BPF has no cheap hash flush. The next arm re-baselines userspace rate snapshots so leftover counters are not treated as a new flood.</aside>
+        </section>
+
+        <section class="section wrap">
+            <div class="section-head">
+                <h2>Control socket</h2>
+                <span class="idx">04 / voidgatectl</span>
+            </div>
+            <div class="term">
+                <div class="term-bar"><i></i><i></i><i></i> /run/voidgate.sock</div>
+                <pre><span class="cmd">$ sudo voidgatectl status</span>
+<span class="out">state=idle armed=0 rx_pps=412 rx_bps=2800000 drops=0 iface=eth0</span>
+
+<span class="cmd">$ sudo voidgatectl drop 203.0.113.0/24</span>
+<span class="out">ok</span>
+
+<span class="cmd">$ sudo voidgatectl status</span>
+<span class="out">state=active armed=1 rx_pps=184200 rx_bps=980000000 drops=1 iface=eth0</span>
+
+<span class="cmd">$ sudo voidgatectl disarm</span>
+<span class="out">ok</span></pre>
+            </div>
+            <p class="lede">One line in, text out: <code>status</code>, <code>stats</code>, <code>drops</code>, <code>arm</code>, <code>disarm</code>, <code>drop &lt;cidr&gt;</code>, <code>undrop &lt;cidr&gt;</code>, <code>reload</code>. Prometheus, if enabled, is <code>127.0.0.1:9105/metrics</code>.</p>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="wrap footer-inner">
+            <div>
+                <strong>VoidGate</strong>
+                <p>Multi-layer XDP shield for one Linux VM. Userspace Apache-2.0 · BPF GPL-2.0-only.</p>
+                <div class="footer-nav">
+                    <a href="architecture.html">Architecture</a>
+                    <a href="install.html">Install</a>
+                    <a href="operations.html">Operations</a>
+                    <a href="https://github.com/lynch1981/VoidGate">Source</a>
+                </div>
+            </div>
+            <div class="footer-meta">
+                <p>github.com/lynch1981/VoidGate</p>
+                <p>GitHub Pages from <code>docs/</code></p>
+            </div>
+        </div>
+    </footer>
+    <script src="js/site.js"></script>
+    <script src="js/datapath.js"></script>
+</body>
+</html>

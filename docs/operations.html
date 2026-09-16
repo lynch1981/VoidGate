@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Operations — VoidGate</title>
+    <meta name="description" content="voidgatectl, voidgate.conf, Prometheus metrics, reload vs attach, and ACTIVE policy.">
+    <meta name="theme-color" content="#05060a">
+    <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+    <link rel="canonical" href="https://lynch1981.github.io/VoidGate/operations.html">
+    <meta property="og:title" content="Operations — VoidGate">
+    <meta property="og:description" content="One line in, text out. /run/voidgate.sock">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://lynch1981.github.io/VoidGate/operations.html">
+    <link rel="preload" href="fonts/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/ibm-plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header">
+        <div class="wrap header-inner">
+            <a class="brand" href="index.html">
+                <img src="img/mark.svg" width="22" height="22" alt="">
+                VoidGate
+            </a>
+            <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
+            <nav id="site-nav" class="site-nav">
+                <a href="architecture.html">Architecture</a>
+                <a href="install.html">Install</a>
+                <a href="operations.html">Operations</a>
+                <a class="nav-ext" href="https://github.com/lynch1981/VoidGate">GitHub</a>
+            </nav>
+        </div>
+    </header>
+
+    <main id="main" class="wrap prose">
+        <header class="page-head">
+            <p class="kicker">03 / operations</p>
+            <h1>One line in. Text out.</h1>
+            <p class="lede"><code>voidgatectl</code> talks to <code>/run/voidgate.sock</code>. Prometheus, if <code>metrics_port &gt; 0</code>, binds <code>127.0.0.1:9105/metrics</code>.</p>
+        </header>
+
+        <h2>voidgatectl</h2>
+        <div class="grid-table-wrap">
+            <table class="grid-table">
+                <thead>
+                    <tr>
+                        <th>Command</th>
+                        <th>Effect</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>status</td>
+                        <td><code>state</code>, <code>armed</code>, <code>rx_pps</code>, <code>rx_bps</code>, drop count, iface</td>
+                    </tr>
+                    <tr>
+                        <td>stats</td>
+                        <td>XDP counters: <code>rx_pkts</code>, <code>passed</code>, <code>dropped</code>, <code>non_ip</code>, <code>map_full</code>, <code>parse_err</code></td>
+                    </tr>
+                    <tr>
+                        <td>drops</td>
+                        <td>installed prefixes with <code>reason</code> and age</td>
+                    </tr>
+                    <tr>
+                        <td>arm</td>
+                        <td><code>cfg.armed = 1</code>; re-baseline remote rate snapshots</td>
+                    </tr>
+                    <tr>
+                        <td>disarm</td>
+                        <td>flush <code>drop_*</code>, <code>cfg.armed = 0</code>, back to IDLE</td>
+                    </tr>
+                    <tr>
+                        <td>drop &lt;cidr&gt;</td>
+                        <td>manual insert; forces ACTIVE. Reason 1. Not auto-expired.</td>
+                    </tr>
+                    <tr>
+                        <td>undrop &lt;cidr&gt;</td>
+                        <td>remove one prefix from the drop tree</td>
+                    </tr>
+                    <tr>
+                        <td>reload</td>
+                        <td>re-read the config file; replace allow/local maps and ports</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <aside class="note idle"><code>reload</code> does not change the attached interface, XDP mode, or map sizes. Those are fixed at start.</aside>
+        <p>Drop reasons: <code>1</code> manual, <code>2</code> policy, <code>3</code> aggregate.</p>
+
+        <h2>Config</h2>
+        <p>Key=value. Empty <code>local_networks</code> means auto-detect from the interface. A non-empty <code>allow_networks</code> replaces the built-in list (metadata, localhost, link-local).</p>
+        <div class="code">
+            <div class="code-head">
+                <span>configs/voidgate.conf</span>
+                <button type="button" class="copy">Copy</button>
+            </div>
+            <pre><code>interface = eth0
+xdp_mode = auto
+
+# IDLE watchdog (aggregate NIC / coarse XDP counters)
+wake_pps = 20000
+wake_mbps = 1000
+idle_poll_ms = 1000
+clear_seconds = 30
+
+# ACTIVE policy
+threshold_pps = 20000
+threshold_mbps = 1000
+ban_time = 1900
+aggregate_k = 8
+
+local_networks =
+allow_networks = 169.254.169.254/32, 127.0.0.0/8, ::1/128, fe80::/10, ff02::/16
+allow_ports = 22
+
+remote_map_size = 262144
+drop_map_size = 65536
+metrics_port = 9105</code></pre>
+        </div>
+        <div class="grid-table-wrap">
+            <table class="grid-table">
+                <thead>
+                    <tr>
+                        <th>Key</th>
+                        <th>Role</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>wake_pps / wake_mbps</td>
+                        <td>NIC is on fire → arm the gate</td>
+                    </tr>
+                    <tr>
+                        <td>threshold_pps / threshold_mbps</td>
+                        <td>this remote is part of the attack → install a drop</td>
+                    </tr>
+                    <tr>
+                        <td>clear_seconds</td>
+                        <td>quiet time required (with empty drop tree) to return IDLE</td>
+                    </tr>
+                    <tr>
+                        <td>ban_time</td>
+                        <td>seconds a policy/aggregate drop lives; manuals stay</td>
+                    </tr>
+                    <tr>
+                        <td>aggregate_k</td>
+                        <td>dropped hosts in a <code>/24</code> or <code>/64</code> before aggregating</td>
+                    </tr>
+                    <tr>
+                        <td>allow_ports</td>
+                        <td>TCP ports on the <em>local</em> side (default 22)</td>
+                    </tr>
+                    <tr>
+                        <td>metrics_port</td>
+                        <td><code>0</code> disables HTTP; otherwise localhost only</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h2>Prometheus</h2>
+        <p>When <code>metrics_port</code> is positive, the daemon listens on localhost and serves <code>GET /metrics</code>:</p>
+        <div class="code">
+            <div class="code-head">
+                <span>/metrics</span>
+                <button type="button" class="copy">Copy</button>
+            </div>
+            <pre><code># TYPE voidgate_armed gauge
+voidgate_armed 0
+# TYPE voidgate_rx_packets_total counter
+voidgate_rx_packets_total 0
+# TYPE voidgate_rx_bytes_total counter
+voidgate_rx_bytes_total 0
+# TYPE voidgate_dropped_packets_total counter
+voidgate_dropped_packets_total 0
+# TYPE voidgate_map_full_total counter
+voidgate_map_full_total 0
+# TYPE voidgate_drop_prefixes gauge
+voidgate_drop_prefixes 0
+# TYPE voidgate_rx_pps gauge
+voidgate_rx_pps 0</code></pre>
+        </div>
+
+        <h2>ACTIVE policy, short</h2>
+        <p>Each tick, remotes over threshold become <code>/32</code> or <code>/128</code>. Dense clusters become <code>/24</code> or <code>/64</code>. Userspace will not install a prefix that covers the VM itself or the allow list. On disarm, <code>remote_*</code> stays; the next arm re-baselines snapshots so leftover counters are not a phantom flood.</p>
+        <aside class="note warn">A remote source port of 22 is not SSH. Only the local side of <code>allow_ports</code> is whitelisted. Do not drop the interface CIDR.</aside>
+    </main>
+
+    <footer class="site-footer">
+        <div class="wrap footer-inner">
+            <div>
+                <strong>VoidGate</strong>
+                <p>Multi-layer XDP shield for one Linux VM. Userspace Apache-2.0 · BPF GPL-2.0-only.</p>
+                <div class="footer-nav">
+                    <a href="index.html">Home</a>
+                    <a href="architecture.html">Architecture</a>
+                    <a href="install.html">Install</a>
+                    <a href="https://github.com/lynch1981/VoidGate">Source</a>
+                </div>
+            </div>
+            <div class="footer-meta">
+                <p>github.com/lynch1981/VoidGate</p>
+                <p>GitHub Pages from <code>docs/</code></p>
+            </div>
+        </div>
+    </footer>
+    <script src="js/site.js"></script>
+</body>
+</html>
