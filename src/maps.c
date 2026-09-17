@@ -484,8 +484,7 @@ vg_drop_flush(struct vg_maps *m)
 
 
 static int
-iface_local_prefixes(const char *iface, struct vg_prefix *out,
-    int max)
+iface_local_prefixes(const char *iface, struct vg_prefix *out, int max)
 {
     struct ifaddrs *ifa, *p;
     int n = 0;
@@ -505,16 +504,15 @@ iface_local_prefixes(const char *iface, struct vg_prefix *out,
             struct sockaddr_in *a = (struct sockaddr_in *) p->ifa_addr;
             struct sockaddr_in *m = (struct sockaddr_in *) p->ifa_netmask;
 
+            if (((const uint8_t *) &a->sin_addr)[0] == 127) {
+                continue;
+            }
+
             memset(&out[n], 0, sizeof(out[n]));
             out[n].family = AF_INET;
             memcpy(out[n].addr, &a->sin_addr, 4);
             out[n].prefixlen = (uint8_t) vg_netmask_prefixlen(AF_INET,
                                                              &m->sin_addr);
-
-            if (out[n].addr[0] == 127) {
-                continue;
-            }
-
             vg_prefix_mask(&out[n]);
             n++;
 
