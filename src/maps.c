@@ -38,7 +38,7 @@ bump_memlock(void)
     struct rlimit r = { RLIM_INFINITY, RLIM_INFINITY };
 
     if (setrlimit(RLIMIT_MEMLOCK, &r) < 0) {
-        vg_log("setrlimit(RLIMIT_MEMLOCK) failed: %s", strerror(errno));
+        vg_warn("setrlimit(RLIMIT_MEMLOCK) failed: %s", strerror(errno));
     }
 }
 
@@ -84,16 +84,15 @@ vg_maps_open(struct vg_maps *m, struct vg_config_file *cfg)
     m->sum_scratch = calloc(1, m->sum_scratch_size);
 
     if (m->sum_scratch == NULL) {
-        return -1;
+        vg_die("out of memory");
     }
 
     m->skel = voidgate_bpf__open();
 
     if (m->skel == NULL) {
-        vg_log("failed to open BPF object");
         free(m->sum_scratch);
         m->sum_scratch = NULL;
-        return -1;
+        vg_die("failed to open BPF object");
     }
 
     if (cfg->remote_map_size) {
@@ -109,23 +108,21 @@ vg_maps_open(struct vg_maps *m, struct vg_config_file *cfg)
     err = voidgate_bpf__load(m->skel);
 
     if (err) {
-        vg_log("failed to load BPF object: %d", err);
         voidgate_bpf__destroy(m->skel);
         m->skel = NULL;
         free(m->sum_scratch);
         m->sum_scratch = NULL;
-        return -1;
+        vg_die("failed to load BPF object: %d", err);
     }
 
     m->ifindex = (int) if_nametoindex(cfg->interface);
 
     if (m->ifindex == 0) {
-        vg_log("unknown interface %s", cfg->interface);
         voidgate_bpf__destroy(m->skel);
         m->skel = NULL;
         free(m->sum_scratch);
         m->sum_scratch = NULL;
-        return -1;
+        vg_die("unknown interface %s", cfg->interface);
     }
 
     return 0;
@@ -159,12 +156,14 @@ vg_xdp_attach(struct vg_maps *m, const struct vg_config_file *cfg)
     int err;
 
     if (m->skel == NULL) {
+        vg_warn("XDP attach: BPF object not loaded");
         return -1;
     }
 
     prog_fd = bpf_program__fd(m->skel->progs.voidgate_xdp);
 
     if (prog_fd < 0) {
+        vg_warn("XDP attach: missing program fd");
         return -1;
     }
 
@@ -183,15 +182,15 @@ vg_xdp_attach(struct vg_maps *m, const struct vg_config_file *cfg)
         err = bpf_xdp_attach(m->ifindex, prog_fd, flags, NULL);
 
         if (err) {
-            vg_log("native XDP attach failed (%s), falling back to skb",
-                   strerror(-err));
+            vg_warn("native XDP attach failed (%s), falling back to skb",
+                    strerror(-err));
             flags = XDP_FLAGS_SKB_MODE;
             err = bpf_xdp_attach(m->ifindex, prog_fd, flags, NULL);
         }
     }
 
     if (err) {
-        vg_log("XDP attach failed: %s", strerror(-err));
+        vg_warn("XDP attach failed: %s", strerror(-err));
         return -1;
     }
 
@@ -493,6 +492,7 @@ local_cidr_from_nic(const char *nic, struct vg_cidr *out, int max)
     int n = 0;
 
     if (getifaddrs(&ifa) < 0) {
+        vg_warn("getifaddrs failed: %s", strerror(errno));
         return -1;
     }
 
@@ -568,7 +568,7 @@ vg_populate_local(struct vg_maps *m, struct vg_config_file *cfg)
         vg_cidr_to_str(&cfg->local_cidr[i], buf, sizeof(buf));
 
         if (lpm_update(fd, &cfg->local_cidr[i], &one) < 0) {
-            vg_log("failed to add local %s: %s", buf, strerror(errno));
+            vg_warn("failed to add local %s: %s", buf, strerror(errno));
 
         } else {
             vg_log("local network %s", buf);
@@ -594,7 +594,7 @@ vg_populate_allow(struct vg_maps *m, const struct vg_config_file *cfg)
         int fd = cfg->allow_cidr[i].family == AF_INET ? fd4 : fd6;
 
         if (lpm_update(fd, &cfg->allow_cidr[i], &one) < 0) {
-            vg_log("failed to add allow prefix");
+            vg_warn("failed to add allow prefix");
         }
     }
 

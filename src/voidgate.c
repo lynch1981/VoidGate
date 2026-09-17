@@ -294,7 +294,7 @@ main(int argc, char **argv)
     }
 
     if (vg_config_load(cfg_path, &cfg) < 0) {
-        return 1;
+        vg_die("config %s", cfg_path);
     }
 
     if (iface_ov != NULL) {
@@ -308,36 +308,36 @@ main(int argc, char **argv)
     signal(SIGPIPE, SIG_IGN);
 
     if (vg_maps_open(&maps, &cfg) < 0) {
-        return 1;
+        vg_die("BPF maps");
     }
 
     if (vg_populate_allow(&maps, &cfg) < 0
         || vg_populate_local(&maps, &cfg) < 0)
     {
         vg_maps_close(&maps);
-        return 1;
+        vg_die("failed to populate allow/local maps");
     }
 
     if (vg_cfg_commit(&maps, 0, &cfg) < 0) {
         vg_maps_close(&maps);
-        return 1;
+        vg_die("failed to commit cfg map");
     }
 
     if (vg_xdp_attach(&maps, &cfg) < 0) {
         vg_maps_close(&maps);
-        return 1;
+        vg_die("XDP attach failed");
     }
 
     if (vg_ctrl_init(&ctrl, &cfg, &maps, cfg_path, iface_ov) < 0) {
         vg_maps_close(&maps);
-        return 1;
+        vg_die("control plane init failed");
     }
 
     ctl_fd = listen_unix(VG_SOCK_PATH);
 
     if (ctl_fd < 0) {
-        vg_log("ctl socket %s failed: %s (voidgatectl disabled)",
-               VG_SOCK_PATH, strerror(errno));
+        vg_warn("ctl socket %s failed: %s (voidgatectl disabled)",
+                VG_SOCK_PATH, strerror(errno));
 
     } else {
         vg_log("ctl socket %s", VG_SOCK_PATH);

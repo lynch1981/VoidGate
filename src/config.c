@@ -147,7 +147,7 @@ parse_csv_cidrs(char *val, struct vg_cidr *arr, int *count,
             }
 
             if (vg_parse_cidr(tok, &arr[*count]) < 0) {
-                vg_log("bad CIDR '%s'", tok);
+                vg_warn("bad CIDR '%s'", tok);
                 return -1;
             }
 
@@ -174,12 +174,13 @@ parse_allow_ports(char *val, struct vg_config_file *c)
 
         if (*tok) {
             if (c->allow_port_count >= VG_MAX_ALLOW_PORTS) {
-                vg_log("allow_ports: more than %d entries", VG_MAX_ALLOW_PORTS);
+                vg_warn("allow_ports: more than %d entries",
+                        VG_MAX_ALLOW_PORTS);
                 return -1;
             }
 
             if (parse_u64(tok, &v) < 0 || v < 1 || v > 65535) {
-                vg_log("bad allow port '%s'", tok);
+                vg_warn("bad allow port '%s'", tok);
                 return -1;
             }
 
@@ -251,7 +252,7 @@ vg_config_load(const char *path, struct vg_config_file *c)
     fp = fopen(path, "r");
 
     if (fp == NULL) {
-        vg_log("config %s not found, using defaults", path);
+        vg_warn("config %s not found, using defaults", path);
         return 0;
     }
 
@@ -286,7 +287,7 @@ vg_config_load(const char *path, struct vg_config_file *c)
             }
 
             if (apply_scalar(c, &scalars[i], val) < 0) {
-                vg_log("%s:%d: bad value for %s", path, lineno, key);
+                vg_warn("%s:%d: bad value for %s", path, lineno, key);
                 fclose(fp);
                 return -1;
             }
@@ -328,7 +329,7 @@ vg_config_load(const char *path, struct vg_config_file *c)
             }
 
         } else {
-            vg_log("%s:%d: unknown key '%s'", path, lineno, key);
+            vg_warn("%s:%d: unknown key '%s'", path, lineno, key);
         }
     }
     fclose(fp);

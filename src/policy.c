@@ -257,7 +257,7 @@ vg_ctrl_drop(struct vg_ctrl *c, const struct vg_cidr *p, uint32_t reason)
         c->drops[c->drop_count].inserted = now;
 
         if (vg_drop_add(c->maps, p, reason, (uint32_t) now) < 0) {
-            vg_log("drop map update %s failed: %s", buf, strerror(errno));
+            vg_warn("drop map update %s failed: %s", buf, strerror(errno));
             return -1;
         }
 
@@ -265,7 +265,7 @@ vg_ctrl_drop(struct vg_ctrl *c, const struct vg_cidr *p, uint32_t reason)
 
     } else {
         if (vg_drop_add(c->maps, p, reason, (uint32_t) now) < 0) {
-            vg_log("drop map update %s failed: %s", buf, strerror(errno));
+            vg_warn("drop map update %s failed: %s", buf, strerror(errno));
             return -1;
         }
 
@@ -295,7 +295,7 @@ vg_ctrl_undrop(struct vg_ctrl *c, const struct vg_cidr *p)
     }
 
     if (vg_drop_del(c->maps, &cidr) < 0 && errno != ENOENT) {
-        vg_log("undrop map delete %s failed: %s", buf, strerror(errno));
+        vg_warn("undrop map delete %s failed: %s", buf, strerror(errno));
     }
 
     vg_log("undrop %s", buf);
@@ -314,6 +314,7 @@ vg_ctrl_arm(struct vg_ctrl *c, const char *why)
     c->quiet_since = 0;
 
     if (vg_cfg_commit(c->maps, 1, c->cfg) < 0) {
+        vg_warn("arm cfg commit failed: %s", strerror(errno));
         return -1;
     }
 
@@ -330,7 +331,7 @@ vg_ctrl_disarm(struct vg_ctrl *c, const char *why)
     c->drop_count = 0;
 
     if (vg_cfg_commit(c->maps, 0, c->cfg) < 0) {
-        vg_log("disarm cfg commit failed: %s", strerror(errno));
+        vg_warn("disarm cfg commit failed: %s", strerror(errno));
         return -1;
     }
 
