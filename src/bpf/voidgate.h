@@ -46,8 +46,6 @@
 struct host_counters {
     __u64  in_pkts;
     __u64  in_bytes;
-    __u64  out_pkts;
-    __u64  out_bytes;
 };
 
 

@@ -20,7 +20,6 @@ static __always_inline int v6_in_lpm(void *map, const __u8 addr[16]);
 static __always_inline int v6_is_linklocal(const __u8 addr[16]);
 static __always_inline int v6_is_mcast_link(const __u8 addr[16]);
 static __always_inline void acc_in(struct host_counters *c, __u64 bytes);
-static __always_inline void acc_out(struct host_counters *c, __u64 bytes);
 static __always_inline int dhcp_ports(__u16 sport, __u16 dport);
 static __always_inline int v4_tcp_allowed(const struct vg_config *c,
     __be32 saddr, __be32 daddr, __u16 sport, __u16 dport);
@@ -33,6 +32,7 @@ static __always_inline int v6_walk_ext(void *data_end, void **l4p,
 static __always_inline int pass(struct vg_metrics *m);
 static __always_inline int parse_fail(struct vg_metrics *m);
 
+/* Userspace ARRAY[1]: armed and allow_ports. XDP reads. */
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 1);
@@ -41,6 +41,7 @@ struct {
 } cfg SEC(".maps");
 
 
+/* Per-CPU ARRAY[1]: rx_* always; drop/pass and the rest only when armed. */
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __uint(max_entries, 1);
@@ -49,6 +50,7 @@ struct {
 } metrics SEC(".maps");
 
 
+/* LPM of IPv4 prefixes to XDP_DROP. ACTIVE write; flushed on disarm. */
 struct {
     __uint(type, BPF_MAP_TYPE_LPM_TRIE);
     __uint(max_entries, VG_DROP_MAP_MAX);
@@ -58,6 +60,7 @@ struct {
 } drop_v4 SEC(".maps");
 
 
+/* LPM of IPv6 prefixes to XDP_DROP. ACTIVE write; flushed on disarm. */
 struct {
     __uint(type, BPF_MAP_TYPE_LPM_TRIE);
     __uint(max_entries, VG_DROP_MAP_MAX);
@@ -67,6 +70,7 @@ struct {
 } drop_v6 SEC(".maps");
 
 
+/* LPM of IPv4 never-drop CIDRs. Userspace at start/reload. */
 struct {
     __uint(type, BPF_MAP_TYPE_LPM_TRIE);
     __uint(max_entries, VG_LPM_MAP_MAX);
@@ -76,6 +80,7 @@ struct {
 } allow_v4 SEC(".maps");
 
 
+/* LPM of IPv6 never-drop CIDRs. Userspace at start/reload. */
 struct {
     __uint(type, BPF_MAP_TYPE_LPM_TRIE);
     __uint(max_entries, VG_LPM_MAP_MAX);
@@ -85,6 +90,7 @@ struct {
 } allow_v6 SEC(".maps");
 
 
+/* LPM of this VM's IPv4 CIDRs; dest/src-local and TCP allow-port. */
 struct {
     __uint(type, BPF_MAP_TYPE_LPM_TRIE);
     __uint(max_entries, VG_LPM_MAP_MAX);
@@ -94,6 +100,7 @@ struct {
 } local_v4 SEC(".maps");
 
 
+/* LPM of this VM's IPv6 CIDRs; dest/src-local and TCP allow-port. */
 struct {
     __uint(type, BPF_MAP_TYPE_LPM_TRIE);
     __uint(max_entries, VG_LPM_MAP_MAX);
@@ -103,6 +110,7 @@ struct {
 } local_v6 SEC(".maps");
 
 
+/* Per-CPU hash of local IPv4 dests; inbound volume when dest is local. */
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
     __uint(max_entries, VG_HOST_MAP_MAX);
@@ -111,6 +119,7 @@ struct {
 } host_v4 SEC(".maps");
 
 
+/* Per-CPU hash of local IPv6 dests; inbound volume when dest is local. */
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
     __uint(max_entries, VG_HOST_MAP_MAX);
@@ -119,6 +128,7 @@ struct {
 } host_v6 SEC(".maps");
 
 
+/* LRU per-CPU hash of dest-local IPv4 sources; not flushed on disarm. */
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_PERCPU_HASH);
     __uint(max_entries, VG_REMOTE_MAP_MAX);
@@ -127,12 +137,14 @@ struct {
 } remote_v4 SEC(".maps");
 
 
+/* LRU per-CPU hash of dest-local IPv6 sources; not flushed on disarm. */
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_PERCPU_HASH);
     __uint(max_entries, VG_REMOTE_MAP_MAX);
     __type(key, struct vg_ip6);
     __type(value, struct host_counters);
 } remote_v6 SEC(".maps");
+
 
 static __always_inline struct vg_metrics *
 get_metrics(void)
@@ -238,18 +250,6 @@ acc_in(struct host_counters *c, __u64 bytes)
 
     c->in_pkts++;
     c->in_bytes += bytes;
-}
-
-
-static __always_inline void
-acc_out(struct host_counters *c, __u64 bytes)
-{
-    if (c == NULL) {
-        return;
-    }
-
-    c->out_pkts++;
-    c->out_bytes += bytes;
 }
 
 
@@ -496,7 +496,6 @@ voidgate_xdp(struct xdp_md *ctx)
         __be32 saddr, daddr;
         __u8 proto;
         __u16 sport = 0, dport = 0;
-        int dst_local, src_local;
         int first_frag;
 
         if ((void *) (ip + 1) > data_end) {
@@ -553,16 +552,9 @@ voidgate_xdp(struct xdp_md *ctx)
 
         v4_count:
 
-        dst_local = v4_in_lpm(&local_v4, daddr);
-        src_local = v4_in_lpm(&local_v4, saddr);
-
-        if (dst_local) {
+        if (v4_in_lpm(&local_v4, daddr)) {
             acc_in(VG_HASH_GET(host_v4, &daddr, m), pkt_len);
             acc_in(VG_HASH_GET(remote_v4, &saddr, m), pkt_len);
-        }
-
-        if (src_local) {
-            acc_out(VG_HASH_GET(host_v4, &saddr, m), pkt_len);
         }
 
         return pass(m);
@@ -575,7 +567,6 @@ voidgate_xdp(struct xdp_md *ctx)
         __u16 sport = 0, dport = 0;
         __u8 icmp6_type = 0;
         struct vg_ip6 saddr = {}, daddr = {};
-        int dst_local, src_local;
 
         if ((void *) (ip6 + 1) > data_end) {
             return parse_fail(m);
@@ -643,16 +634,9 @@ voidgate_xdp(struct xdp_md *ctx)
 
         v6_count:
 
-        dst_local = v6_in_lpm(&local_v6, daddr.addr);
-        src_local = v6_in_lpm(&local_v6, saddr.addr);
-
-        if (dst_local) {
+        if (v6_in_lpm(&local_v6, daddr.addr)) {
             acc_in(VG_HASH_GET(host_v6, &daddr, m), pkt_len);
             acc_in(VG_HASH_GET(remote_v6, &saddr, m), pkt_len);
-        }
-
-        if (src_local) {
-            acc_out(VG_HASH_GET(host_v6, &saddr, m), pkt_len);
         }
 
         return pass(m);
