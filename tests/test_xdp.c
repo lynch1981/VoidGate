@@ -660,7 +660,7 @@ main(void)
         return 1;
     }
 
-    printf("VoidGate XDP tests\n");
+    printf("voidGate XDP tests\n");
 
     /* IDLE: always PASS, only coarse counters */
     set_armed(skel, 0);

@@ -20,7 +20,7 @@ vg_log_prefix(void)
     clock_gettime(CLOCK_REALTIME, &ts);
     localtime_r(&ts.tv_sec, &tm);
     strftime(tbuf, sizeof(tbuf), "%Y-%m-%dT%H:%M:%S", &tm);
-    fprintf(stderr, "%s voidgate: ", tbuf);
+    fprintf(stderr, "%s voidGate: ", tbuf);
 }
 
 

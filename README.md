@@ -1,4 +1,4 @@
-# VoidGate
+# voidGate
 
 Multi-layer XDP shield for a single Linux VM. Silent unless the instance
 is under attack.

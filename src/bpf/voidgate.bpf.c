@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* VoidGate XDP data plane.
+/* voidGate XDP data plane.
  *
  * IDLE  (cfg.armed == 0): bump rx counters, XDP_PASS. No parse, no LPM, no LRU.
  * ACTIVE (cfg.armed == 1): whitelist → drop LPM → count → PASS|DROP.

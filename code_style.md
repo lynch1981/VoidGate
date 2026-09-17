@@ -1,10 +1,10 @@
-# VoidGate C style
+# voidGate C style
 
 Formatting follows the nginx Code style chapter:
 
 https://nginx.org/en/docs/dev/development_guide.html#code_style
 
-This file is VoidGate’s version: same rules, `vg_` / `VG_` names, and
+This file is voidGate’s version: same rules, `vg_` / `VG_` names, and
 the deviations in the last section. Product, BPF, and commit-message
 rules stay in AGENT.md.
 
@@ -61,7 +61,7 @@ Userspace files start with:
 ```
 
 `src/bpf/voidgate.bpf.c` is GPL-2.0-only. It may use the kernel SPDX
-form on line 1; see [VoidGate notes](#voidgate-notes).
+form on line 1; see [voidGate notes](#voidgate-notes).
 
 Project headers come first, then system and library headers:
 
@@ -504,7 +504,7 @@ failed:
     return -1;
 ```
 
-## VoidGate notes
+## voidGate notes
 
 These override nginx where they conflict.
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=VoidGate XDP DDoS gate
+Description=voidGate XDP DDoS gate
 After=network-online.target
 Wants=network-online.target
 

@@ -1,10 +1,10 @@
-# AGENT.md — VoidGate
+# AGENT.md — voidGate
 
 Instructions for humans and coding agents working in this repo.
 
 ## What this is
 
-VoidGate is an **inline XDP DDoS gate for one Linux VM**. It is not
+voidGate is an **inline XDP DDoS gate for one Linux VM**. It is not
 FastNetMon and must not grow FastNetMon’s capture backends.
 
 - Data plane: `src/bpf/voidgate.bpf.c` — `XDP_PASS` or `XDP_DROP` only.
