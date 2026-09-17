@@ -18,9 +18,10 @@ BPF_CFLAGS := -O2 -g -target bpf -D__TARGET_ARCH_$(ARCH) \
 	-isystem /usr/include/$(shell dpkg-architecture \
 		-qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)
 
-USER_OBJS := src/voidgate.o src/config.o src/policy.o src/maps.o src/ipaddr.o
+USER_OBJS := src/voidgate.o src/config.o src/policy.o src/maps.o src/ipaddr.o \
+	src/log.o
 CTL_OBJS  := src/voidgatectl.o
-TEST_OBJS := tests/test_xdp.o src/ipaddr.o src/config.o
+TEST_OBJS := tests/test_xdp.o src/ipaddr.o src/config.o src/log.o
 
 .PHONY: all clean install test
 
@@ -48,13 +49,14 @@ voidgate: $(USER_OBJS)
 voidgatectl: $(CTL_OBJS)
 	$(CC) $(CFLAGS) -o $@ $(CTL_OBJS)
 
-tests/test_xdp: tests/test_xdp.o src/ipaddr.o src/config.o
-	$(CC) $(CFLAGS) -o $@ tests/test_xdp.o src/ipaddr.o src/config.o $(LDFLAGS)
+tests/test_xdp: tests/test_xdp.o src/ipaddr.o src/config.o src/log.o
+	$(CC) $(CFLAGS) -o $@ tests/test_xdp.o src/ipaddr.o src/config.o \
+		src/log.o $(LDFLAGS)
 
 tests/test_policy: tests/test_policy.c src/policy.c src/policy.h \
-	src/config.o src/ipaddr.o
+	src/config.o src/ipaddr.o src/log.o
 	$(CC) $(CFLAGS) -DVG_CTRL_TEST -o $@ tests/test_policy.c \
-		src/policy.c src/config.o src/ipaddr.o
+		src/policy.c src/config.o src/ipaddr.o src/log.o
 
 test: tests/test_xdp tests/test_policy
 	./tests/test_policy

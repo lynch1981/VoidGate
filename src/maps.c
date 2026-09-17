@@ -47,7 +47,12 @@ static int
 libbpf_print(enum libbpf_print_level level, const char *fmt,
     va_list args)
 {
-    if (level > LIBBPF_WARN) {
+    if (vg_verbose >= 2) {
+        if (level > LIBBPF_INFO) {
+            return 0;
+        }
+
+    } else if (level > LIBBPF_WARN) {
         return 0;
     }
 

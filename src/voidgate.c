@@ -263,7 +263,43 @@ elapsed_ms(const struct timespec *a, const struct timespec *b)
 static void
 usage(const char *argv0)
 {
-    fprintf(stderr, "usage: %s [-c config] [-i iface]\n", argv0);
+    fprintf(stderr, "usage: %s [-c config] [-i iface] [-v|-vv]\n", argv0);
+}
+
+
+static void
+log_verbose_config(const struct vg_config_file *cfg,
+    const struct vg_maps *maps)
+{
+    char buf[80];
+    int i;
+
+    vg_vlog("interface %s xdp_mode %s flags 0x%x", cfg->interface,
+            cfg->xdp_mode, maps->attach_flags);
+    vg_vlog("wake_pps=%llu wake_mbps=%llu threshold_pps=%llu "
+            "threshold_mbps=%llu ban_time=%d",
+            (unsigned long long) cfg->wake_pps,
+            (unsigned long long) cfg->wake_mbps,
+            (unsigned long long) cfg->threshold_pps,
+            (unsigned long long) cfg->threshold_mbps, cfg->ban_time);
+    vg_vlog("clear_seconds=%d aggregate_k=%d metrics_port=%d "
+            "remote_map=%u drop_map=%u",
+            cfg->clear_seconds, cfg->aggregate_k, cfg->metrics_port,
+            cfg->remote_map_size, cfg->drop_map_size);
+
+    for (i = 0; i < cfg->local_cidr_count; i++) {
+        vg_cidr_to_str(&cfg->local_cidr[i], buf, sizeof(buf));
+        vg_vlog("local %s", buf);
+    }
+
+    for (i = 0; i < cfg->allow_cidr_count; i++) {
+        vg_cidr_to_str(&cfg->allow_cidr[i], buf, sizeof(buf));
+        vg_vlog("allow %s", buf);
+    }
+
+    for (i = 0; i < cfg->allow_port_count; i++) {
+        vg_vlog("allow_port %u", cfg->allow_ports[i]);
+    }
 }
 
 
@@ -279,13 +315,18 @@ main(int argc, char **argv)
     struct sigaction sa;
     struct timespec last_tick;
 
-    while ((opt = getopt(argc, argv, "c:i:h")) != -1) {
+    while ((opt = getopt(argc, argv, "c:i:hv")) != -1) {
         switch (opt) {
         case 'c':
             cfg_path = optarg;
             break;
         case 'i':
             iface_ov = optarg;
+            break;
+        case 'v':
+            if (vg_verbose < 2) {
+                vg_verbose++;
+            }
             break;
         default:
             usage(argv[0]);
@@ -349,6 +390,7 @@ main(int argc, char **argv)
         vg_log("prometheus 127.0.0.1:%d/metrics", cfg.metrics_port);
     }
 
+    log_verbose_config(&cfg, &maps);
     vg_log("idle on %s, wake_pps=%llu wake_mbps=%llu", cfg.interface,
            (unsigned long long)cfg.wake_pps,
            (unsigned long long)cfg.wake_mbps);

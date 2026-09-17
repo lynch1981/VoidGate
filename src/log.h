@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <time.h>
 
+extern int vg_verbose;
+
 
 static inline void
 vg_log_prefix(void)
@@ -22,9 +24,9 @@ vg_log_prefix(void)
 }
 
 
-__attribute__((format(printf, 1, 2)))
+__attribute__((format(printf, 3, 4)))
 static inline void
-vg_log(const char *fmt, ...)
+vg_log_at(const char *file, int line, const char *fmt, ...)
 {
     va_list ap;
 
@@ -32,7 +34,7 @@ vg_log(const char *fmt, ...)
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
     va_end(ap);
-    fputc('\n', stderr);
+    fprintf(stderr, " at %s:%d\n", file, line);
 }
 
 
@@ -67,7 +69,22 @@ vg_die_at(const char *file, int line, const char *fmt, ...)
 }
 
 
+#define vg_log(...)  vg_log_at(__FILE__, __LINE__, __VA_ARGS__)
 #define vg_warn(...) vg_warn_at(__FILE__, __LINE__, __VA_ARGS__)
 #define vg_die(...)  vg_die_at(__FILE__, __LINE__, __VA_ARGS__)
+
+#define vg_vlog(...) \
+    do { \
+        if (vg_verbose >= 1) { \
+            vg_log(__VA_ARGS__); \
+        } \
+    } while (0)
+
+#define vg_vvlog(...) \
+    do { \
+        if (vg_verbose >= 2) { \
+            vg_log(__VA_ARGS__); \
+        } \
+    } while (0)
 
 #endif /* _VG_LOG_H_INCLUDED_ */

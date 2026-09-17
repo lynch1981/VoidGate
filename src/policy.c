@@ -430,6 +430,7 @@ policy_one_remote(struct vg_ctrl *c, int family,
     uint64_t dp, db;
     double pps, bps;
     struct vg_cidr p;
+    char buf[80];
 
     if (s == NULL) {
         return;
@@ -463,9 +464,14 @@ policy_one_remote(struct vg_ctrl *c, int family,
     p.family = family;
     memcpy(p.addr, addr, family == AF_INET ? 4 : 16);
     p.prefixlen = family == AF_INET ? 32 : 128;
+    vg_cidr_to_str(&p, buf, sizeof(buf));
+    vg_vvlog("remote %s %.0f pps %.1f Mbps", buf, pps, bps / 1e6);
 
     if (vg_ctrl_drop(c, &p, VG_REASON_POLICY) == 0) {
         maybe_aggregate(c, &p);
+
+    } else {
+        vg_vvlog("remote %s over threshold, not dropped", buf);
     }
 }
 
@@ -507,6 +513,13 @@ walk_remotes(struct vg_ctrl *c, double dt)
 
     if (complete == 1) {
         snap_prune(c);
+        vg_vvlog("remote walk complete");
+
+    } else if (complete == 0) {
+        vg_vvlog("remote walk truncated");
+
+    } else {
+        vg_vvlog("remote walk failed");
     }
 }
 
@@ -584,6 +597,15 @@ vg_ctrl_tick(struct vg_ctrl *c)
 
     if (dt <= 0) {
         return 0;
+    }
+
+    if (c->state == VG_ACTIVE) {
+        vg_vlog("tick active rx=%.0f pps %.1f Mbps drops=%d",
+                c->rx_pps, c->rx_bps / 1e6, c->drop_count);
+
+    } else {
+        vg_vvlog("tick idle rx=%.0f pps %.1f Mbps",
+                 c->rx_pps, c->rx_bps / 1e6);
     }
 
     if (c->state == VG_IDLE) {
