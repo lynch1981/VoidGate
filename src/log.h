@@ -6,12 +6,31 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
 
 extern int vg_verbose;
 
+#define VG_SGR_DIM     "\033[2m"
+#define VG_SGR_CYAN    "\033[36m"
+#define VG_SGR_YELLOW  "\033[33m"
+#define VG_SGR_RED     "\033[31m"
+#define VG_SGR_RESET   "\033[0m"
+
+
+static inline int vg_log_color(void);
+static inline void vg_log_prefix(const char *level, const char *sgr);
+static inline void vg_log_loc(const char *file, int line);
+
+
+static inline int
+vg_log_color(void)
+{
+    return isatty(fileno(stderr)) && getenv("NO_COLOR") == NULL;
+}
+
 
 static inline void
-vg_log_prefix(void)
+vg_log_prefix(const char *level, const char *sgr)
 {
     struct timespec ts;
     struct tm tm;
@@ -20,7 +39,27 @@ vg_log_prefix(void)
     clock_gettime(CLOCK_REALTIME, &ts);
     localtime_r(&ts.tv_sec, &tm);
     strftime(tbuf, sizeof(tbuf), "%Y-%m-%dT%H:%M:%S", &tm);
-    fprintf(stderr, "%s voidGate: ", tbuf);
+
+    if (vg_log_color()) {
+        fprintf(stderr, VG_SGR_DIM "%s" VG_SGR_RESET
+                " voidGate %s[%s]" VG_SGR_RESET " ", tbuf, sgr, level);
+
+    } else {
+        fprintf(stderr, "%s voidGate [%s] ", tbuf, level);
+    }
+}
+
+
+static inline void
+vg_log_loc(const char *file, int line)
+{
+    if (vg_log_color()) {
+        fprintf(stderr, " " VG_SGR_DIM "at %s:%d" VG_SGR_RESET "\n",
+                file, line);
+
+    } else {
+        fprintf(stderr, " at %s:%d\n", file, line);
+    }
 }
 
 
@@ -30,11 +69,11 @@ vg_log_at(const char *file, int line, const char *fmt, ...)
 {
     va_list ap;
 
-    vg_log_prefix();
+    vg_log_prefix("INFO", VG_SGR_CYAN);
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
     va_end(ap);
-    fprintf(stderr, " at %s:%d\n", file, line);
+    vg_log_loc(file, line);
 }
 
 
@@ -44,12 +83,11 @@ vg_warn_at(const char *file, int line, const char *fmt, ...)
 {
     va_list ap;
 
-    vg_log_prefix();
-    fputs("warning: ", stderr);
+    vg_log_prefix("WARN", VG_SGR_YELLOW);
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
     va_end(ap);
-    fprintf(stderr, " at %s:%d\n", file, line);
+    vg_log_loc(file, line);
 }
 
 
@@ -59,12 +97,11 @@ vg_die_at(const char *file, int line, const char *fmt, ...)
 {
     va_list ap;
 
-    vg_log_prefix();
-    fputs("fatal: ", stderr);
+    vg_log_prefix("FATL", VG_SGR_RED);
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
     va_end(ap);
-    fprintf(stderr, " at %s:%d\n", file, line);
+    vg_log_loc(file, line);
     exit(1);
 }
 
