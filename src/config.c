@@ -73,11 +73,11 @@ vg_config_defaults(struct vg_config_file *c)
     c->allow_port_count = 1;
     c->auto_local = 1;
 
-    vg_parse_cidr("169.254.169.254/32", &c->allow_nets[c->allow_net_count++]);
-    vg_parse_cidr("127.0.0.0/8", &c->allow_nets[c->allow_net_count++]);
-    vg_parse_cidr("::1/128", &c->allow_nets[c->allow_net_count++]);
-    vg_parse_cidr("fe80::/10", &c->allow_nets[c->allow_net_count++]);
-    vg_parse_cidr("ff02::/16", &c->allow_nets[c->allow_net_count++]);
+    vg_parse_cidr("169.254.169.254/32", &c->allow_cidr[c->allow_cidr_count++]);
+    vg_parse_cidr("127.0.0.0/8", &c->allow_cidr[c->allow_cidr_count++]);
+    vg_parse_cidr("::1/128", &c->allow_cidr[c->allow_cidr_count++]);
+    vg_parse_cidr("fe80::/10", &c->allow_cidr[c->allow_cidr_count++]);
+    vg_parse_cidr("ff02::/16", &c->allow_cidr[c->allow_cidr_count++]);
 }
 
 
@@ -309,7 +309,7 @@ vg_config_load(const char *path, struct vg_config_file *c)
             if (*val) {
                 c->auto_local = 0;
 
-                if (parse_csv_cidrs(val, c->local_nets, &c->local_net_count,
+                if (parse_csv_cidrs(val, c->local_cidr, &c->local_cidr_count,
                                     VG_MAX_CIDR_LIST) < 0)
                 {
                     fclose(fp);
@@ -319,7 +319,7 @@ vg_config_load(const char *path, struct vg_config_file *c)
 
         } else if (strcmp(key, "allow_networks") == 0) {
             if (*val) {
-                if (parse_csv_cidrs(val, c->allow_nets, &c->allow_net_count,
+                if (parse_csv_cidrs(val, c->allow_cidr, &c->allow_cidr_count,
                                     VG_MAX_CIDR_LIST) < 0)
                 {
                     fclose(fp);
@@ -347,14 +347,14 @@ vg_cidr_is_protected(const struct vg_config_file *cfg,
 {
     int i;
 
-    for (i = 0; i < cfg->local_net_count; i++) {
-        if (vg_cidr_covers_or_overlaps(p, &cfg->local_nets[i])) {
+    for (i = 0; i < cfg->local_cidr_count; i++) {
+        if (vg_cidr_covers_or_overlaps(p, &cfg->local_cidr[i])) {
             return 1;
         }
     }
 
-    for (i = 0; i < cfg->allow_net_count; i++) {
-        if (vg_cidr_covers_or_overlaps(p, &cfg->allow_nets[i])) {
+    for (i = 0; i < cfg->allow_cidr_count; i++) {
+        if (vg_cidr_covers_or_overlaps(p, &cfg->allow_cidr[i])) {
             return 1;
         }
     }

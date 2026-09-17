@@ -29,7 +29,7 @@ static int foreach_family(struct vg_maps *m, int fd, int family, size_t ksz,
 static int lpm_update(int fd, const struct vg_cidr *p, const void *val);
 static int lpm_delete(int fd, const struct vg_cidr *p);
 static int flush_lpm(int fd, int v6);
-static int local_nets_from_nic(const char *nic, struct vg_cidr *out,
+static int local_cidr_from_nic(const char *nic, struct vg_cidr *out,
     int max);
 
 static void
@@ -483,8 +483,11 @@ vg_drop_flush(struct vg_maps *m)
 }
 
 
+/* This VM's addresses as host CIDRs (/32, /128). The on-link netmask
+ * is not used: a neighbor on the same LAN is not local.
+ */
 static int
-local_nets_from_nic(const char *nic, struct vg_cidr *out, int max)
+local_cidr_from_nic(const char *nic, struct vg_cidr *out, int max)
 {
     struct ifaddrs *ifa, *p;
     int n = 0;
@@ -502,25 +505,19 @@ local_nets_from_nic(const char *nic, struct vg_cidr *out, int max)
 
         if (p->ifa_addr->sa_family == AF_INET) {
             struct sockaddr_in *a = (struct sockaddr_in *) p->ifa_addr;
-            struct sockaddr_in *m = (struct sockaddr_in *) p->ifa_netmask;
-            int len;
 
             if (((const uint8_t *) &a->sin_addr)[0] == 127) {
                 continue;
             }
 
-            len = vg_netmask_to_prefixlen(AF_INET, &m->sin_addr);
             memset(&out[n], 0, sizeof(out[n]));
             out[n].family = AF_INET;
             memcpy(out[n].addr, &a->sin_addr, 4);
-            out[n].prefixlen = (uint8_t) len;
-            vg_cidr_mask(&out[n]);
+            out[n].prefixlen = 32;
             n++;
 
         } else if (p->ifa_addr->sa_family == AF_INET6) {
             struct sockaddr_in6 *a = (struct sockaddr_in6 *) p->ifa_addr;
-            struct sockaddr_in6 *msk = (struct sockaddr_in6 *) p->ifa_netmask;
-            int len;
 
             if (IN6_IS_ADDR_LINKLOCAL(&a->sin6_addr)
                 || IN6_IS_ADDR_LOOPBACK(&a->sin6_addr))
@@ -528,12 +525,10 @@ local_nets_from_nic(const char *nic, struct vg_cidr *out, int max)
                 continue;
             }
 
-            len = vg_netmask_to_prefixlen(AF_INET6, &msk->sin6_addr);
             memset(&out[n], 0, sizeof(out[n]));
             out[n].family = AF_INET6;
             memcpy(out[n].addr, &a->sin6_addr, 16);
-            out[n].prefixlen = (uint8_t) len;
-            vg_cidr_mask(&out[n]);
+            out[n].prefixlen = 128;
             n++;
         }
     }
@@ -551,14 +546,14 @@ vg_populate_local(struct vg_maps *m, struct vg_config_file *cfg)
 
     if (cfg->auto_local) {
         struct vg_cidr tmp[VG_MAX_CIDR_LIST];
-        int n = local_nets_from_nic(cfg->interface, tmp, VG_MAX_CIDR_LIST);
+        int n = local_cidr_from_nic(cfg->interface, tmp, VG_MAX_CIDR_LIST);
 
         if (n < 0) {
             return -1;
         }
 
-        memcpy(cfg->local_nets, tmp, (size_t) n * sizeof(tmp[0]));
-        cfg->local_net_count = n;
+        memcpy(cfg->local_cidr, tmp, (size_t) n * sizeof(tmp[0]));
+        cfg->local_cidr_count = n;
     }
 
     fd4 = bpf_map__fd(m->skel->maps.local_v4);
@@ -566,13 +561,13 @@ vg_populate_local(struct vg_maps *m, struct vg_config_file *cfg)
     flush_lpm(fd4, 0);
     flush_lpm(fd6, 1);
 
-    for (i = 0; i < cfg->local_net_count; i++) {
+    for (i = 0; i < cfg->local_cidr_count; i++) {
         char buf[80];
-        int fd = cfg->local_nets[i].family == AF_INET ? fd4 : fd6;
+        int fd = cfg->local_cidr[i].family == AF_INET ? fd4 : fd6;
 
-        vg_cidr_to_str(&cfg->local_nets[i], buf, sizeof(buf));
+        vg_cidr_to_str(&cfg->local_cidr[i], buf, sizeof(buf));
 
-        if (lpm_update(fd, &cfg->local_nets[i], &one) < 0) {
+        if (lpm_update(fd, &cfg->local_cidr[i], &one) < 0) {
             vg_log("failed to add local %s: %s", buf, strerror(errno));
 
         } else {
@@ -595,10 +590,10 @@ vg_populate_allow(struct vg_maps *m, const struct vg_config_file *cfg)
     flush_lpm(fd4, 0);
     flush_lpm(fd6, 1);
 
-    for (i = 0; i < cfg->allow_net_count; i++) {
-        int fd = cfg->allow_nets[i].family == AF_INET ? fd4 : fd6;
+    for (i = 0; i < cfg->allow_cidr_count; i++) {
+        int fd = cfg->allow_cidr[i].family == AF_INET ? fd4 : fd6;
 
-        if (lpm_update(fd, &cfg->allow_nets[i], &one) < 0) {
+        if (lpm_update(fd, &cfg->allow_cidr[i], &one) < 0) {
             vg_log("failed to add allow prefix");
         }
     }

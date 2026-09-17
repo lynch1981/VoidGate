@@ -544,6 +544,26 @@ test_prefixes(void)
            && !vg_cidr_is_protected(&cfg, &p), "test-net is not protected");
     expect(vg_parse_cidr("127.0.0.1/32", &p) == 0
            && vg_cidr_is_protected(&cfg, &p), "localhost is protected");
+
+    vg_config_defaults(&cfg);
+    expect(vg_parse_cidr("192.168.64.9/32", &cfg.local_cidr[0]) == 0,
+           "parse vm /32");
+    cfg.local_cidr_count = 1;
+    expect(vg_parse_cidr("192.168.64.9/32", &p) == 0
+           && vg_cidr_is_protected(&cfg, &p), "vm address is local");
+    expect(vg_parse_cidr("192.168.64.8/32", &p) == 0
+           && !vg_cidr_is_protected(&cfg, &p),
+           "on-link neighbor is not local");
+    expect(vg_parse_cidr("192.168.64.0/24", &p) == 0
+           && vg_cidr_is_protected(&cfg, &p),
+           "lan /24 drop would cover the vm");
+    expect(vg_parse_cidr("2001:db8::9/128", &cfg.local_cidr[0]) == 0,
+           "parse vm /128");
+    expect(vg_parse_cidr("2001:db8::9/128", &p) == 0
+           && vg_cidr_is_protected(&cfg, &p), "vm v6 address is local");
+    expect(vg_parse_cidr("2001:db8::8/128", &p) == 0
+           && !vg_cidr_is_protected(&cfg, &p),
+           "on-link v6 neighbor is not local");
 }
 
 

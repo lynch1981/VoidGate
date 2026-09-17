@@ -27,10 +27,10 @@ struct vg_config_file {
     uint32_t          drop_map_size;
     uint16_t          allow_ports[VG_MAX_ALLOW_PORTS];
     int               allow_port_count;
-    struct vg_cidr    local_nets[VG_MAX_CIDR_LIST];
-    int               local_net_count;
-    struct vg_cidr    allow_nets[VG_MAX_CIDR_LIST];
-    int               allow_net_count;
+    struct vg_cidr    local_cidr[VG_MAX_CIDR_LIST];
+    int               local_cidr_count;
+    struct vg_cidr    allow_cidr[VG_MAX_CIDR_LIST];
+    int               allow_cidr_count;
     int               auto_local;
 };
 

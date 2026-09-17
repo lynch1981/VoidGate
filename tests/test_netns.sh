@@ -28,7 +28,7 @@ threshold_pps = 20
 threshold_mbps = 1000
 ban_time = 60
 aggregate_k = 8
-local_networks = 198.51.100.10/32
+local_networks =
 allow_ports = 22
 metrics_port = 0
 EOF
