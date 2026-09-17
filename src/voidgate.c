@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <net/if.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <signal.h>
@@ -340,6 +341,10 @@ main(int argc, char **argv)
 
     if (iface_ov != NULL) {
         snprintf(cfg.interface, sizeof(cfg.interface), "%s", iface_ov);
+    }
+
+    if (if_nametoindex(cfg.interface) == 0) {
+        vg_die("unknown interface %s", cfg.interface);
     }
 
     memset(&sa, 0, sizeof(sa));
