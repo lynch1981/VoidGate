@@ -9,12 +9,14 @@ ARCH    := $(shell uname -m | sed 's/x86_64/x86/' | sed 's/aarch64/arm64/')
 
 SRC     := src
 BPFDIR  := src/bpf
-CFLAGS  := -O2 -g -Wall -Wextra -Wno-unused-parameter -I$(SRC) -I$(BPFDIR)
+CFLAGS  := -O2 -g -Wall -Wextra -Wno-unused-parameter -MMD -MP \
+	-I$(SRC) -I$(BPFDIR)
 LDFLAGS := -lbpf -lelf -lz
 BPF_CFLAGS := -O2 -g -target bpf -D__TARGET_ARCH_$(ARCH) \
 	-I$(SRC) -I$(BPFDIR) \
 	-Wall -Wno-unused-value -Wno-pointer-sign \
 	-Wno-compare-distinct-pointer-types \
+	-MMD -MP \
 	-isystem /usr/include/$(shell dpkg-architecture \
 		-qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)
 
@@ -54,9 +56,11 @@ tests/test_xdp: tests/test_xdp.o src/ipaddr.o src/config.o src/log.o
 		src/log.o $(LDFLAGS)
 
 tests/test_policy: tests/test_policy.c src/policy.c src/policy.h \
-	src/config.o src/ipaddr.o src/log.o
-	$(CC) $(CFLAGS) -DVG_CTRL_TEST -o $@ tests/test_policy.c \
-		src/policy.c src/config.o src/ipaddr.o src/log.o
+	src/log.h src/config.h src/maps.h src/ipaddr.h \
+	$(BPFDIR)/voidgate.h src/config.o src/ipaddr.o src/log.o
+	$(CC) $(CFLAGS) -DVG_CTRL_TEST -MF tests/test_policy.d -o $@ \
+		tests/test_policy.c src/policy.c src/config.o src/ipaddr.o \
+		src/log.o
 
 test: tests/test_xdp tests/test_policy
 	./tests/test_policy
@@ -65,7 +69,12 @@ test: tests/test_xdp tests/test_policy
 
 clean:
 	rm -f voidgate voidgatectl tests/test_xdp tests/test_policy \
-		src/*.o tests/*.o $(BPFDIR)/voidgate.bpf.o $(BPFDIR)/voidgate.skel.h
+		src/*.o src/*.d tests/*.o tests/*.d \
+		$(BPFDIR)/voidgate.bpf.o $(BPFDIR)/voidgate.bpf.d \
+		$(BPFDIR)/voidgate.skel.h
+
+-include $(USER_OBJS:.o=.d) $(CTL_OBJS:.o=.d) tests/test_xdp.d \
+	tests/test_policy.d $(BPFDIR)/voidgate.bpf.d
 
 install: all
 	install -d $(DESTDIR)$(PREFIX)/sbin

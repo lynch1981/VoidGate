@@ -3,6 +3,10 @@ voidgatectl
 tests/test_xdp
 tests/test_ctrl
 *.o
+*.d
+*~
+.*.swp
+.*.swo
 src/bpf/voidgate.bpf.o
 src/bpf/voidgate.skel.h
 src/bpf/vmlinux.h
