@@ -26,7 +26,7 @@ struct cfg_scalar {
 static char *trim(char *s);
 static int parse_u64(const char *s, uint64_t *out);
 static int parse_int(const char *s, int *out);
-static int parse_csv_cidrs(char *val, struct vg_prefix *arr, int *count,
+static int parse_csv_cidrs(char *val, struct vg_cidr *arr, int *count,
     int max);
 static int parse_allow_ports(char *val, struct vg_config_file *c);
 static int apply_scalar(struct vg_config_file *c, const struct cfg_scalar *s,
@@ -131,7 +131,7 @@ parse_int(const char *s, int *out)
 
 
 static int
-parse_csv_cidrs(char *val, struct vg_prefix *arr, int *count,
+parse_csv_cidrs(char *val, struct vg_cidr *arr, int *count,
     int max)
 {
     char *save = NULL;
@@ -310,7 +310,7 @@ vg_config_load(const char *path, struct vg_config_file *c)
                 c->auto_local = 0;
 
                 if (parse_csv_cidrs(val, c->local_nets, &c->local_net_count,
-                                    VG_MAX_PREFIX_LIST) < 0)
+                                    VG_MAX_CIDR_LIST) < 0)
                 {
                     fclose(fp);
                     return -1;
@@ -320,7 +320,7 @@ vg_config_load(const char *path, struct vg_config_file *c)
         } else if (strcmp(key, "allow_networks") == 0) {
             if (*val) {
                 if (parse_csv_cidrs(val, c->allow_nets, &c->allow_net_count,
-                                    VG_MAX_PREFIX_LIST) < 0)
+                                    VG_MAX_CIDR_LIST) < 0)
                 {
                     fclose(fp);
                     return -1;
@@ -342,19 +342,19 @@ vg_config_load(const char *path, struct vg_config_file *c)
 
 
 int
-vg_prefix_is_protected(const struct vg_config_file *cfg,
-    const struct vg_prefix *p)
+vg_cidr_is_protected(const struct vg_config_file *cfg,
+    const struct vg_cidr *p)
 {
     int i;
 
     for (i = 0; i < cfg->local_net_count; i++) {
-        if (vg_prefix_covers_or_overlaps(p, &cfg->local_nets[i])) {
+        if (vg_cidr_covers_or_overlaps(p, &cfg->local_nets[i])) {
             return 1;
         }
     }
 
     for (i = 0; i < cfg->allow_net_count; i++) {
-        if (vg_prefix_covers_or_overlaps(p, &cfg->allow_nets[i])) {
+        if (vg_cidr_covers_or_overlaps(p, &cfg->allow_nets[i])) {
             return 1;
         }
     }

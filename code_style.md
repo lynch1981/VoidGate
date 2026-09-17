@@ -148,7 +148,7 @@ typedef struct {
     int        family;
     uint8_t    addr[16];
     uint8_t    prefixlen;
-} vg_prefix_t;
+} vg_cidr_t;
 ```
 
 Keep alignment identical among different structures in the file. A
@@ -181,7 +181,7 @@ Function pointers inside structures have defined types ending with
 `_pt`:
 
 ```c
-typedef int (*vg_ctrl_drop_pt)(struct vg_ctrl *c, const struct vg_prefix *p,
+typedef int (*vg_ctrl_drop_pt)(struct vg_ctrl *c, const struct vg_cidr *p,
     uint32_t reason);
 
 typedef struct {
@@ -216,7 +216,7 @@ size_t                  len;
 uint8_t                *p;
 uint32_t                key;
 struct vg_config        bc;
-struct vg_prefix        prefix;
+struct vg_cidr          cidr;
 char                    tmp[128];
 ```
 

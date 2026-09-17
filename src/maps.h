@@ -44,9 +44,9 @@ typedef void (*vg_remote_pt)(int family, const uint8_t *addr,
 int vg_remote_foreach(struct vg_maps *m, uint32_t budget, vg_remote_pt fn,
     void *ctx);
 
-int vg_drop_add(struct vg_maps *m, const struct vg_prefix *p, uint32_t reason,
+int vg_drop_add(struct vg_maps *m, const struct vg_cidr *p, uint32_t reason,
     uint32_t now);
-int vg_drop_del(struct vg_maps *m, const struct vg_prefix *p);
+int vg_drop_del(struct vg_maps *m, const struct vg_cidr *p);
 int vg_drop_flush(struct vg_maps *m);
 
 int vg_populate_local(struct vg_maps *m, struct vg_config_file *cfg);

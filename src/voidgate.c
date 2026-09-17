@@ -170,7 +170,7 @@ handle_ctl(struct vg_ctrl *ctrl, int cfd)
         }
 
     } else if (strncmp(req, "drop ", 5) == 0) {
-        struct vg_prefix p;
+        struct vg_cidr p;
 
         if (vg_parse_cidr(req + 5, &p) < 0) {
             snprintf(reply, sizeof(reply), "error: bad cidr\n");
@@ -184,7 +184,7 @@ handle_ctl(struct vg_ctrl *ctrl, int cfd)
         }
 
     } else if (strncmp(req, "undrop ", 7) == 0) {
-        struct vg_prefix p;
+        struct vg_cidr p;
 
         if (vg_parse_cidr(req + 7, &p) < 0) {
             snprintf(reply, sizeof(reply), "error: bad cidr\n");

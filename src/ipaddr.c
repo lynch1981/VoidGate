@@ -11,7 +11,7 @@ static int bits_equal(const uint8_t *a, const uint8_t *b, int bits);
 
 
 int
-vg_parse_cidr(const char *s, struct vg_prefix *out)
+vg_parse_cidr(const char *s, struct vg_cidr *out)
 {
     int    plen;
     char  *slash;
@@ -46,7 +46,7 @@ vg_parse_cidr(const char *s, struct vg_prefix *out)
             return -1;
         }
 
-        vg_prefix_mask(out);
+        vg_cidr_mask(out);
         return 0;
     }
 
@@ -62,13 +62,13 @@ vg_parse_cidr(const char *s, struct vg_prefix *out)
         return -1;
     }
 
-    vg_prefix_mask(out);
+    vg_cidr_mask(out);
     return 0;
 }
 
 
 void
-vg_prefix_mask(struct vg_prefix *p)
+vg_cidr_mask(struct vg_cidr *p)
 {
     int nbytes, i, bits;
 
@@ -119,8 +119,8 @@ bits_equal(const uint8_t *a, const uint8_t *b, int bits)
 
 
 int
-vg_prefix_contains(const struct vg_prefix *hay,
-    const struct vg_prefix *needle)
+vg_cidr_contains(const struct vg_cidr *hay,
+    const struct vg_cidr *needle)
 {
     if (hay == NULL || needle == NULL || hay->family != needle->family) {
         return 0;
@@ -135,15 +135,15 @@ vg_prefix_contains(const struct vg_prefix *hay,
 
 
 int
-vg_prefix_covers_or_overlaps(const struct vg_prefix *a,
-    const struct vg_prefix *b)
+vg_cidr_covers_or_overlaps(const struct vg_cidr *a,
+    const struct vg_cidr *b)
 {
-    return vg_prefix_contains(a, b) || vg_prefix_contains(b, a);
+    return vg_cidr_contains(a, b) || vg_cidr_contains(b, a);
 }
 
 
 void
-vg_prefix_to_str(const struct vg_prefix *p, char *buf, size_t buflen)
+vg_cidr_to_str(const struct vg_cidr *p, char *buf, size_t buflen)
 {
     char ip[INET6_ADDRSTRLEN];
 
@@ -157,7 +157,7 @@ vg_prefix_to_str(const struct vg_prefix *p, char *buf, size_t buflen)
 
 
 int
-vg_prefix_v4_slash24(const struct vg_prefix *host, struct vg_prefix *net)
+vg_cidr_v4_slash24(const struct vg_cidr *host, struct vg_cidr *net)
 {
     if (host == NULL || host->family != AF_INET) {
         return -1;
@@ -165,13 +165,13 @@ vg_prefix_v4_slash24(const struct vg_prefix *host, struct vg_prefix *net)
 
     *net = *host;
     net->prefixlen = 24;
-    vg_prefix_mask(net);
+    vg_cidr_mask(net);
     return 0;
 }
 
 
 int
-vg_prefix_v6_slash64(const struct vg_prefix *host, struct vg_prefix *net)
+vg_cidr_v6_slash64(const struct vg_cidr *host, struct vg_cidr *net)
 {
     if (host == NULL || host->family != AF_INET6) {
         return -1;
@@ -179,7 +179,7 @@ vg_prefix_v6_slash64(const struct vg_prefix *host, struct vg_prefix *net)
 
     *net = *host;
     net->prefixlen = 64;
-    vg_prefix_mask(net);
+    vg_cidr_mask(net);
     return 0;
 }
 

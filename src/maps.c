@@ -26,10 +26,10 @@ static int libbpf_print(enum libbpf_print_level level, const char *fmt,
 static size_t sum_scratch_need(int ncpus);
 static int foreach_family(struct vg_maps *m, int fd, int family, size_t ksz,
     uint32_t budget, vg_remote_pt fn, void *ctx);
-static int lpm_update(int fd, const struct vg_prefix *p, const void *val);
-static int lpm_delete(int fd, const struct vg_prefix *p);
+static int lpm_update(int fd, const struct vg_cidr *p, const void *val);
+static int lpm_delete(int fd, const struct vg_cidr *p);
 static int flush_lpm(int fd, int v6);
-static int iface_local_prefixes(const char *iface, struct vg_prefix *out,
+static int local_nets_from_nic(const char *nic, struct vg_cidr *out,
     int max);
 
 static void
@@ -384,7 +384,7 @@ vg_metrics_read(struct vg_maps *m, struct vg_metrics *out)
 
 
 static int
-lpm_update(int fd, const struct vg_prefix *p, const void *val)
+lpm_update(int fd, const struct vg_cidr *p, const void *val)
 {
     if (p->family == AF_INET) {
         struct vg_lpm_v4 k = { .prefixlen = p->prefixlen };
@@ -403,7 +403,7 @@ lpm_update(int fd, const struct vg_prefix *p, const void *val)
 
 
 static int
-lpm_delete(int fd, const struct vg_prefix *p)
+lpm_delete(int fd, const struct vg_cidr *p)
 {
     if (p->family == AF_INET) {
         struct vg_lpm_v4 k = { .prefixlen = p->prefixlen };
@@ -422,7 +422,7 @@ lpm_delete(int fd, const struct vg_prefix *p)
 
 
 int
-vg_drop_add(struct vg_maps *m, const struct vg_prefix *p, uint32_t reason,
+vg_drop_add(struct vg_maps *m, const struct vg_cidr *p, uint32_t reason,
     uint32_t now)
 {
     struct drop_entry e = { .reason = reason, .insert_time = now };
@@ -434,7 +434,7 @@ vg_drop_add(struct vg_maps *m, const struct vg_prefix *p, uint32_t reason,
 
 
 int
-vg_drop_del(struct vg_maps *m, const struct vg_prefix *p)
+vg_drop_del(struct vg_maps *m, const struct vg_cidr *p)
 {
     int fd = p->family == AF_INET ? bpf_map__fd(m->skel->maps.drop_v4)
              : bpf_map__fd(m->skel->maps.drop_v6);
@@ -484,7 +484,7 @@ vg_drop_flush(struct vg_maps *m)
 
 
 static int
-iface_local_prefixes(const char *iface, struct vg_prefix *out, int max)
+local_nets_from_nic(const char *nic, struct vg_cidr *out, int max)
 {
     struct ifaddrs *ifa, *p;
     int n = 0;
@@ -495,7 +495,7 @@ iface_local_prefixes(const char *iface, struct vg_prefix *out, int max)
 
     for (p = ifa; p != NULL && n < max; p = p->ifa_next) {
         if (p->ifa_addr == NULL || p->ifa_name == NULL
-            || strcmp(p->ifa_name, iface) != 0)
+            || strcmp(p->ifa_name, nic) != 0)
         {
             continue;
         }
@@ -514,7 +514,7 @@ iface_local_prefixes(const char *iface, struct vg_prefix *out, int max)
             out[n].family = AF_INET;
             memcpy(out[n].addr, &a->sin_addr, 4);
             out[n].prefixlen = (uint8_t) len;
-            vg_prefix_mask(&out[n]);
+            vg_cidr_mask(&out[n]);
             n++;
 
         } else if (p->ifa_addr->sa_family == AF_INET6) {
@@ -533,7 +533,7 @@ iface_local_prefixes(const char *iface, struct vg_prefix *out, int max)
             out[n].family = AF_INET6;
             memcpy(out[n].addr, &a->sin6_addr, 16);
             out[n].prefixlen = (uint8_t) len;
-            vg_prefix_mask(&out[n]);
+            vg_cidr_mask(&out[n]);
             n++;
         }
     }
@@ -550,8 +550,8 @@ vg_populate_local(struct vg_maps *m, struct vg_config_file *cfg)
     uint8_t one = 1;
 
     if (cfg->auto_local) {
-        struct vg_prefix tmp[VG_MAX_PREFIX_LIST];
-        int n = iface_local_prefixes(cfg->interface, tmp, VG_MAX_PREFIX_LIST);
+        struct vg_cidr tmp[VG_MAX_CIDR_LIST];
+        int n = local_nets_from_nic(cfg->interface, tmp, VG_MAX_CIDR_LIST);
 
         if (n < 0) {
             return -1;
@@ -570,7 +570,7 @@ vg_populate_local(struct vg_maps *m, struct vg_config_file *cfg)
         char buf[80];
         int fd = cfg->local_nets[i].family == AF_INET ? fd4 : fd6;
 
-        vg_prefix_to_str(&cfg->local_nets[i], buf, sizeof(buf));
+        vg_cidr_to_str(&cfg->local_nets[i], buf, sizeof(buf));
 
         if (lpm_update(fd, &cfg->local_nets[i], &one) < 0) {
             vg_log("failed to add local %s: %s", buf, strerror(errno));

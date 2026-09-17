@@ -13,7 +13,7 @@ enum vg_state { VG_IDLE = 0, VG_ACTIVE = 1 };
 #define VG_SNAP_BUCKETS  4096
 
 struct vg_drop_rec {
-    struct vg_prefix  prefix;
+    struct vg_cidr    cidr;
     uint32_t          reason;
     time_t            inserted;
 };
@@ -52,8 +52,8 @@ void vg_ctrl_free(struct vg_ctrl *c);
 int vg_ctrl_arm(struct vg_ctrl *c, const char *why);
 int vg_ctrl_disarm(struct vg_ctrl *c, const char *why);
 int vg_ctrl_tick(struct vg_ctrl *c);
-int vg_ctrl_drop(struct vg_ctrl *c, const struct vg_prefix *p, uint32_t reason);
-int vg_ctrl_undrop(struct vg_ctrl *c, const struct vg_prefix *p);
+int vg_ctrl_drop(struct vg_ctrl *c, const struct vg_cidr *p, uint32_t reason);
+int vg_ctrl_undrop(struct vg_ctrl *c, const struct vg_cidr *p);
 int vg_ctrl_reload(struct vg_ctrl *c);
 void vg_ctrl_status(struct vg_ctrl *c, char *buf, size_t buflen);
 void vg_ctrl_stats(struct vg_ctrl *c, char *buf, size_t buflen);

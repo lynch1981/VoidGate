@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#define VG_MAX_PREFIX_LIST  256
+#define VG_MAX_CIDR_LIST  256
 #define VG_MAX_IFACE  32
 #define VG_CFG_PATH_MAX  256
 
@@ -27,9 +27,9 @@ struct vg_config_file {
     uint32_t          drop_map_size;
     uint16_t          allow_ports[VG_MAX_ALLOW_PORTS];
     int               allow_port_count;
-    struct vg_prefix  local_nets[VG_MAX_PREFIX_LIST];
+    struct vg_cidr    local_nets[VG_MAX_CIDR_LIST];
     int               local_net_count;
-    struct vg_prefix  allow_nets[VG_MAX_PREFIX_LIST];
+    struct vg_cidr    allow_nets[VG_MAX_CIDR_LIST];
     int               allow_net_count;
     int               auto_local;
 };
@@ -37,7 +37,7 @@ struct vg_config_file {
 
 void vg_config_defaults(struct vg_config_file *c);
 int vg_config_load(const char *path, struct vg_config_file *c);
-int vg_prefix_is_protected(const struct vg_config_file *cfg,
-    const struct vg_prefix *p);
+int vg_cidr_is_protected(const struct vg_config_file *cfg,
+    const struct vg_cidr *p);
 
 #endif /* _VG_CONFIG_H_INCLUDED_ */

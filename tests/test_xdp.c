@@ -409,7 +409,7 @@ set_armed(struct voidgate_bpf *skel, uint32_t armed)
 static int
 add_lpm_v4(int fd, const char *cidr, uint8_t val)
 {
-    struct vg_prefix p;
+    struct vg_cidr p;
     struct vg_lpm_v4 k;
 
     if (vg_parse_cidr(cidr, &p) < 0) {
@@ -426,7 +426,7 @@ add_lpm_v4(int fd, const char *cidr, uint8_t val)
 static int
 add_drop_v4(struct voidgate_bpf *skel, const char *cidr)
 {
-    struct vg_prefix p;
+    struct vg_cidr p;
     struct vg_lpm_v4 k;
     struct drop_entry e = { .reason = VG_REASON_MANUAL, .insert_time = 1 };
 
@@ -445,7 +445,7 @@ add_drop_v4(struct voidgate_bpf *skel, const char *cidr)
 static int
 add_drop_v6(struct voidgate_bpf *skel, const char *cidr)
 {
-    struct vg_prefix p;
+    struct vg_cidr p;
     struct vg_lpm_v6 k;
     struct drop_entry e = { .reason = VG_REASON_MANUAL, .insert_time = 1 };
 
@@ -464,7 +464,7 @@ add_drop_v6(struct voidgate_bpf *skel, const char *cidr)
 static int
 add_lpm_v6(int fd, const char *cidr, uint8_t val)
 {
-    struct vg_prefix p;
+    struct vg_cidr p;
     struct vg_lpm_v6 k;
 
     if (vg_parse_cidr(cidr, &p) < 0) {
@@ -523,7 +523,7 @@ read_metrics(struct voidgate_bpf *skel)
 static void
 test_prefixes(void)
 {
-    struct vg_prefix p, n;
+    struct vg_cidr p, n;
     struct vg_config_file cfg;
 
     printf("prefix / config tests\n");
@@ -534,16 +534,16 @@ test_prefixes(void)
            && p.addr[8] == 0 && p.addr[15] == 0,
            "v6 parse masks host bits");
     expect(vg_parse_cidr("198.51.100.10/32", &p) == 0
-           && vg_prefix_v4_slash24(&p, &n) == 0 && n.prefixlen == 24
+           && vg_cidr_v4_slash24(&p, &n) == 0 && n.prefixlen == 24
            && n.addr[3] == 0, "v4 /24 aggregate masks");
 
     vg_config_defaults(&cfg);
     expect(vg_parse_cidr("169.254.169.254/32", &p) == 0
-           && vg_prefix_is_protected(&cfg, &p), "metadata IP is protected");
+           && vg_cidr_is_protected(&cfg, &p), "metadata IP is protected");
     expect(vg_parse_cidr("203.0.113.1/32", &p) == 0
-           && !vg_prefix_is_protected(&cfg, &p), "test-net is not protected");
+           && !vg_cidr_is_protected(&cfg, &p), "test-net is not protected");
     expect(vg_parse_cidr("127.0.0.1/32", &p) == 0
-           && vg_prefix_is_protected(&cfg, &p), "localhost is protected");
+           && vg_cidr_is_protected(&cfg, &p), "localhost is protected");
 }
 
 

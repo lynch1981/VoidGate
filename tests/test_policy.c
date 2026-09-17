@@ -15,7 +15,7 @@ static int tick(struct vg_ctrl *c);
 
 #define FOREACH_MAX  64
 
-static struct vg_prefix deleted;
+static struct vg_cidr deleted;
 static int complete_scan = 1;
 static int nitems;
 static struct {
@@ -25,7 +25,7 @@ static struct {
 } items[FOREACH_MAX];
 
 int
-vg_drop_del(struct vg_maps *m, const struct vg_prefix *p)
+vg_drop_del(struct vg_maps *m, const struct vg_cidr *p)
 {
     (void) m;
     deleted = *p;
@@ -34,7 +34,7 @@ vg_drop_del(struct vg_maps *m, const struct vg_prefix *p)
 
 
 int
-vg_drop_add(struct vg_maps *m, const struct vg_prefix *p, uint32_t reason,
+vg_drop_add(struct vg_maps *m, const struct vg_cidr *p, uint32_t reason,
     uint32_t now)
 {
     (void) m;
@@ -141,7 +141,7 @@ main(void)
 {
     struct vg_config_file cfg;
     struct vg_ctrl c;
-    struct vg_prefix expired, manual;
+    struct vg_cidr expired, manual;
     int i, drops_before;
 
     vg_config_defaults(&cfg);
@@ -152,9 +152,9 @@ main(void)
 
     assert(vg_parse_cidr("203.0.113.1/32", &expired) == 0);
     assert(vg_parse_cidr("2001:db8::bad/128", &manual) == 0);
-    c.drops[0] = (struct vg_drop_rec){ .prefix = expired,
+    c.drops[0] = (struct vg_drop_rec){ .cidr = expired,
                                        .reason = VG_REASON_POLICY };
-    c.drops[1] = (struct vg_drop_rec){ .prefix = manual,
+    c.drops[1] = (struct vg_drop_rec){ .cidr = manual,
                                        .reason = VG_REASON_MANUAL };
     c.drop_count = 2;
     nitems = 0;
@@ -162,7 +162,7 @@ main(void)
     assert(tick(&c) == 0);
     assert(memcmp(&deleted, &expired, sizeof(expired)) == 0);
     assert(c.drop_count == 1 && c.drops[0].reason == VG_REASON_MANUAL);
-    assert(memcmp(&c.drops[0].prefix, &manual, sizeof(manual)) == 0);
+    assert(memcmp(&c.drops[0].cidr, &manual, sizeof(manual)) == 0);
 
     /* Truncated walks must keep snapshots so a second look can compute a
      * rate. */

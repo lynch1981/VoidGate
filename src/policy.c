@@ -26,8 +26,8 @@ static void snap_clear(struct vg_ctrl *c);
 static void snap_prune(struct vg_ctrl *c);
 static struct vg_snap_ent *snap_get(struct vg_ctrl *c, int family,
     const uint8_t *addr, int *created);
-static int drops_find(struct vg_ctrl *c, const struct vg_prefix *p);
-static int maybe_aggregate(struct vg_ctrl *c, const struct vg_prefix *host);
+static int drops_find(struct vg_ctrl *c, const struct vg_cidr *p);
+static int maybe_aggregate(struct vg_ctrl *c, const struct vg_cidr *host);
 static void policy_one_remote(struct vg_ctrl *c, int family,
     const uint8_t *addr, const struct host_counters *cur, double dt);
 static void remote_cb(int family, const uint8_t *addr,
@@ -200,14 +200,14 @@ vg_ctrl_free(struct vg_ctrl *c)
 
 
 static int
-drops_find(struct vg_ctrl *c, const struct vg_prefix *p)
+drops_find(struct vg_ctrl *c, const struct vg_cidr *p)
 {
     int i;
 
     for (i = 0; i < c->drop_count; i++) {
-        if (c->drops[i].prefix.family == p->family
-            && c->drops[i].prefix.prefixlen == p->prefixlen
-            && memcmp(c->drops[i].prefix.addr, p->addr,
+        if (c->drops[i].cidr.family == p->family
+            && c->drops[i].cidr.prefixlen == p->prefixlen
+            && memcmp(c->drops[i].cidr.addr, p->addr,
                       p->family == AF_INET ? 4 : 16) == 0)
         {
             return i;
@@ -219,15 +219,15 @@ drops_find(struct vg_ctrl *c, const struct vg_prefix *p)
 
 
 int
-vg_ctrl_drop(struct vg_ctrl *c, const struct vg_prefix *p, uint32_t reason)
+vg_ctrl_drop(struct vg_ctrl *c, const struct vg_cidr *p, uint32_t reason)
 {
     char buf[80];
     time_t now = time(NULL);
     int idx;
 
-    vg_prefix_to_str(p, buf, sizeof(buf));
+    vg_cidr_to_str(p, buf, sizeof(buf));
 
-    if (vg_prefix_is_protected(c->cfg, p)) {
+    if (vg_cidr_is_protected(c->cfg, p)) {
         vg_log("refuse drop %s (covers local/allow)", buf);
         return -1;
     }
@@ -252,7 +252,7 @@ vg_ctrl_drop(struct vg_ctrl *c, const struct vg_prefix *p, uint32_t reason)
             c->drop_cap = ncap;
         }
 
-        c->drops[c->drop_count].prefix = *p;
+        c->drops[c->drop_count].cidr = *p;
         c->drops[c->drop_count].reason = reason;
         c->drops[c->drop_count].inserted = now;
 
@@ -281,20 +281,20 @@ vg_ctrl_drop(struct vg_ctrl *c, const struct vg_prefix *p, uint32_t reason)
 
 
 int
-vg_ctrl_undrop(struct vg_ctrl *c, const struct vg_prefix *p)
+vg_ctrl_undrop(struct vg_ctrl *c, const struct vg_cidr *p)
 {
-    struct vg_prefix prefix = *p;
-    int i = drops_find(c, &prefix);
+    struct vg_cidr cidr = *p;
+    int i = drops_find(c, &cidr);
     char buf[80];
 
-    vg_prefix_to_str(p, buf, sizeof(buf));
+    vg_cidr_to_str(p, buf, sizeof(buf));
 
     if (i >= 0) {
         c->drops[i] = c->drops[c->drop_count - 1];
         c->drop_count--;
     }
 
-    if (vg_drop_del(c->maps, &prefix) < 0 && errno != ENOENT) {
+    if (vg_drop_del(c->maps, &cidr) < 0 && errno != ENOENT) {
         vg_log("undrop map delete %s failed: %s", buf, strerror(errno));
     }
 
@@ -389,24 +389,24 @@ vg_ctrl_reload(struct vg_ctrl *c)
 
 
 static int
-maybe_aggregate(struct vg_ctrl *c, const struct vg_prefix *host)
+maybe_aggregate(struct vg_ctrl *c, const struct vg_cidr *host)
 {
-    struct vg_prefix net;
+    struct vg_cidr net;
     int i, n = 0;
 
     if (host->family == AF_INET) {
-        if (vg_prefix_v4_slash24(host, &net) < 0) {
+        if (vg_cidr_v4_slash24(host, &net) < 0) {
             return 0;
         }
 
     } else {
-        if (vg_prefix_v6_slash64(host, &net) < 0) {
+        if (vg_cidr_v6_slash64(host, &net) < 0) {
             return 0;
         }
     }
 
     for (i = 0; i < c->drop_count; i++) {
-        if (vg_prefix_contains(&net, &c->drops[i].prefix)) {
+        if (vg_cidr_contains(&net, &c->drops[i].cidr)) {
             n++;
         }
     }
@@ -428,7 +428,7 @@ policy_one_remote(struct vg_ctrl *c, int family,
     struct vg_snap_ent *s = snap_get(c, family, addr, &created);
     uint64_t dp, db;
     double pps, bps;
-    struct vg_prefix p;
+    struct vg_cidr p;
 
     if (s == NULL) {
         return;
@@ -527,7 +527,7 @@ expire_drops(struct vg_ctrl *c)
             continue;
         }
 
-        vg_ctrl_undrop(c, &c->drops[i].prefix);
+        vg_ctrl_undrop(c, &c->drops[i].cidr);
     }
 }
 
@@ -672,7 +672,7 @@ vg_ctrl_list_drops(struct vg_ctrl *c, char *buf, size_t buflen)
         char p[80];
         int n;
 
-        vg_prefix_to_str(&c->drops[i].prefix, p, sizeof(p));
+        vg_cidr_to_str(&c->drops[i].cidr, p, sizeof(p));
         n = snprintf(buf + used, buflen - used,
                      "%s reason=%u age=%ld\n", p, c->drops[i].reason,
                      (long) (time(NULL) - c->drops[i].inserted));
