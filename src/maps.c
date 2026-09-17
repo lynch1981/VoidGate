@@ -503,22 +503,24 @@ iface_local_prefixes(const char *iface, struct vg_prefix *out, int max)
         if (p->ifa_addr->sa_family == AF_INET) {
             struct sockaddr_in *a = (struct sockaddr_in *) p->ifa_addr;
             struct sockaddr_in *m = (struct sockaddr_in *) p->ifa_netmask;
+            int len;
 
             if (((const uint8_t *) &a->sin_addr)[0] == 127) {
                 continue;
             }
 
+            len = vg_netmask_to_prefixlen(AF_INET, &m->sin_addr);
             memset(&out[n], 0, sizeof(out[n]));
             out[n].family = AF_INET;
             memcpy(out[n].addr, &a->sin_addr, 4);
-            out[n].prefixlen = (uint8_t) vg_netmask_prefixlen(AF_INET,
-                                                             &m->sin_addr);
+            out[n].prefixlen = (uint8_t) len;
             vg_prefix_mask(&out[n]);
             n++;
 
         } else if (p->ifa_addr->sa_family == AF_INET6) {
             struct sockaddr_in6 *a = (struct sockaddr_in6 *) p->ifa_addr;
             struct sockaddr_in6 *msk = (struct sockaddr_in6 *) p->ifa_netmask;
+            int len;
 
             if (IN6_IS_ADDR_LINKLOCAL(&a->sin6_addr)
                 || IN6_IS_ADDR_LOOPBACK(&a->sin6_addr))
@@ -526,11 +528,11 @@ iface_local_prefixes(const char *iface, struct vg_prefix *out, int max)
                 continue;
             }
 
+            len = vg_netmask_to_prefixlen(AF_INET6, &msk->sin6_addr);
             memset(&out[n], 0, sizeof(out[n]));
             out[n].family = AF_INET6;
             memcpy(out[n].addr, &a->sin6_addr, 16);
-            out[n].prefixlen = (uint8_t) vg_netmask_prefixlen(AF_INET6,
-                                                             &msk->sin6_addr);
+            out[n].prefixlen = (uint8_t) len;
             vg_prefix_mask(&out[n]);
             n++;
         }

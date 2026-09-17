@@ -7,56 +7,7 @@
 #include <string.h>
 
 
-static int mask_from_netmask(int family, const void *mask);
 static int bits_equal(const uint8_t *a, const uint8_t *b, int bits);
-
-static int
-mask_from_netmask(int family, const void *mask)
-{
-    int i, bits = 0;
-
-    if (family == AF_INET) {
-        uint32_t m = ntohl(*(const uint32_t *) mask);
-
-        for (i = 31; i >= 0; i--) {
-            if (m & (1u << i)) {
-                bits++;
-
-            } else {
-                break;
-            }
-        }
-
-        return bits;
-    }
-
-    {
-        const uint8_t *b = mask;
-
-        for (i = 0; i < 16; i++) {
-            uint8_t c = b[i];
-            int k;
-
-            if (c == 0xff) {
-                bits += 8;
-                continue;
-            }
-
-            for (k = 7; k >= 0; k--) {
-                if (c & (1u << k)) {
-                    bits++;
-
-                } else {
-                    return bits;
-                }
-            }
-
-            return bits;
-        }
-
-        return bits;
-    }
-}
 
 
 int
@@ -234,7 +185,49 @@ vg_prefix_v6_slash64(const struct vg_prefix *host, struct vg_prefix *net)
 
 
 int
-vg_netmask_prefixlen(int family, const void *mask)
+vg_netmask_to_prefixlen(int family, const void *mask)
 {
-    return mask_from_netmask(family, mask);
+    int i, bits = 0;
+
+    if (family == AF_INET) {
+        uint32_t m = ntohl(*(const uint32_t *) mask);
+
+        for (i = 31; i >= 0; i--) {
+            if (m & (1u << i)) {
+                bits++;
+
+            } else {
+                break;
+            }
+        }
+
+        return bits;
+    }
+
+    {
+        const uint8_t *b = mask;
+
+        for (i = 0; i < 16; i++) {
+            uint8_t c = b[i];
+            int k;
+
+            if (c == 0xff) {
+                bits += 8;
+                continue;
+            }
+
+            for (k = 7; k >= 0; k--) {
+                if (c & (1u << k)) {
+                    bits++;
+
+                } else {
+                    return bits;
+                }
+            }
+
+            return bits;
+        }
+
+        return bits;
+    }
 }
