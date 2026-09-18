@@ -1,4 +1,6 @@
+
 /* SPDX-License-Identifier: Apache-2.0 */
+
 #include "bpf/voidgate.h"
 #include "bpf/voidgate.skel.h"
 #include "config.h"

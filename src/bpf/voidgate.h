@@ -1,7 +1,9 @@
+
 /* SPDX-License-Identifier: Apache-2.0
  * Shared types for the XDP program and userspace. Keep this header
  * free of libc and kernel-only APIs so both sides can include it.
  */
+
 #ifndef _VG_VOIDGATE_H_INCLUDED_
 #define _VG_VOIDGATE_H_INCLUDED_
 

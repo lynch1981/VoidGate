@@ -1,4 +1,6 @@
+
 /* SPDX-License-Identifier: Apache-2.0 */
+
 #ifndef _VG_LOG_H_INCLUDED_
 #define _VG_LOG_H_INCLUDED_
 

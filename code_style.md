@@ -44,7 +44,7 @@ snap_hash(int family, const uint8_t *addr)
 ## Files
 
 A typical source file may contain the following sections, separated by
-two empty lines:
+two empty lines, except for the license spacing described below:
 
 - SPDX license comment
 - includes
@@ -54,10 +54,15 @@ two empty lines:
 - variable definitions
 - function definitions
 
-Userspace files start with:
+Hand-written Apache-2.0 C sources and headers, including tests and the
+shared BPF header, begin with one empty line, the opening license comment,
+and one empty line. For a multi-line comment, place the trailing empty
+line after its closing `*/`:
 
 ```c
+
 /* SPDX-License-Identifier: Apache-2.0 */
+
 ```
 
 `src/bpf/voidgate.bpf.c` is GPL-2.0-only. It may use the kernel SPDX
