@@ -6,6 +6,7 @@
 #include "maps.h"
 #include "policy.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -236,23 +237,51 @@ void
 vg_ctl_server_handle(struct vg_ctrl *ctrl, int cfd)
 {
     char                    *nl;
-    size_t                   i, len;
+    size_t                   i, len, used = 0;
     ssize_t                  n;
     const vg_ctl_command_t  *cmd;
     char                     req[256], reply[8192];
 
-    n = read(cfd, req, sizeof(req) - 1);
+    for (;;) {
+        n = read(cfd, req + used, sizeof(req) - 1 - used);
 
-    if (n <= 0) {
-        return;
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+
+            return;
+        }
+
+        if (n == 0) {
+            if (used == 0) {
+                return;
+            }
+
+            break;
+        }
+
+        nl = memchr(req + used, '\n', (size_t) n);
+        len = nl != NULL ? (size_t) (nl - (req + used)) : (size_t) n;
+
+        if (memchr(req + used, 0, len) != NULL) {
+            snprintf(reply, sizeof(reply), "error: bad command\n");
+            goto send_reply;
+        }
+
+        used += len;
+
+        if (nl != NULL) {
+            break;
+        }
+
+        if (used == sizeof(req) - 1) {
+            snprintf(reply, sizeof(reply), "error: command too long\n");
+            goto send_reply;
+        }
     }
 
-    req[n] = 0;
-    nl = strchr(req, '\n');
-
-    if (nl != NULL) {
-        *nl = 0;
-    }
+    req[used] = 0;
 
     snprintf(reply, sizeof(reply), "error: unknown command\n");
 
@@ -270,9 +299,22 @@ vg_ctl_server_handle(struct vg_ctrl *ctrl, int cfd)
         }
     }
 
-    if (reply[0]) {
-        ssize_t wr = write(cfd, reply, strlen(reply));
+send_reply:
 
-        (void) wr;
+    len = strlen(reply);
+    used = 0;
+
+    while (used < len) {
+        n = send(cfd, reply + used, len - used, MSG_NOSIGNAL);
+
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
+
+        if (n <= 0) {
+            return;
+        }
+
+        used += (size_t) n;
     }
 }
