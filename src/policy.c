@@ -513,7 +513,6 @@ walk_remotes(struct vg_ctrl *c, double dt)
 
     if (complete == 1) {
         snap_prune(c);
-        vg_vvlog("remote walk complete");
 
     } else if (complete == 0) {
         vg_vvlog("remote walk truncated");
@@ -577,6 +576,7 @@ vg_ctrl_tick(struct vg_ctrl *c)
 {
     struct vg_metrics m;
     double dt = tick_dt(c);
+    double drop_pps = 0;
 
     if (vg_metrics_read(c->maps, &m) < 0) {
         return -1;
@@ -587,9 +587,12 @@ vg_ctrl_tick(struct vg_ctrl *c)
                       ? m.rx_pkts - c->last_m.rx_pkts : 0;
         uint64_t db = m.rx_bytes >= c->last_m.rx_bytes
                       ? m.rx_bytes - c->last_m.rx_bytes : 0;
+        uint64_t dd = m.dropped >= c->last_m.dropped
+                      ? m.dropped - c->last_m.dropped : 0;
 
         c->rx_pps = (double) dp / dt;
         c->rx_bps = (double) db * 8.0 / dt;
+        drop_pps = (double) dd / dt;
     }
 
     c->last_m = m;
@@ -599,16 +602,10 @@ vg_ctrl_tick(struct vg_ctrl *c)
         return 0;
     }
 
-    if (c->state == VG_ACTIVE) {
-        vg_vlog("tick active rx=%.0f pps %.1f Mbps drops=%d",
-                c->rx_pps, c->rx_bps / 1e6, c->drop_count);
-
-    } else {
-        vg_vvlog("tick idle rx=%.0f pps %.1f Mbps",
-                 c->rx_pps, c->rx_bps / 1e6);
-    }
-
     if (c->state == VG_IDLE) {
+        vg_vvlog("tick %-6s rx(pps)=%-8.0f rx(Mbps)=%-6.1f",
+                 "idle", c->rx_pps, c->rx_bps / 1e6);
+
         if (c->rx_pps > (double) c->cfg->wake_pps
             || c->rx_bps > (double) c->cfg->wake_mbps * 1000000.0)
         {
@@ -620,6 +617,10 @@ vg_ctrl_tick(struct vg_ctrl *c)
 
     walk_remotes(c, dt);
     expire_drops(c);
+
+    vg_vlog("tick %-6s rx(pps)=%-8.0f rx(Mbps)=%-6.1f "
+            "dropped(pps)=%-8.0f prefixes=%d",
+            "active", c->rx_pps, c->rx_bps / 1e6, drop_pps, c->drop_count);
 
     if (c->rx_pps < (double) c->cfg->wake_pps
         && c->rx_bps < (double) c->cfg->wake_mbps * 1000000.0)
@@ -646,7 +647,8 @@ void
 vg_ctrl_status(struct vg_ctrl *c, char *buf, size_t buflen)
 {
     snprintf(buf, buflen,
-             "state=%s armed=%d rx_pps=%.0f rx_bps=%.0f drops=%d iface=%s\n",
+             "state=%s armed=%d rx_pps=%.0f rx_bps=%.0f "
+             "prefixes=%d iface=%s\n",
              c->state == VG_ACTIVE ? "active" : "idle",
              c->state == VG_ACTIVE, c->rx_pps, c->rx_bps, c->drop_count,
              c->cfg->interface);
@@ -666,7 +668,7 @@ vg_ctrl_stats(struct vg_ctrl *c, char *buf, size_t buflen)
     snprintf(buf, buflen,
              "rx_pkts=%llu rx_bytes=%llu passed=%llu dropped=%llu "
              "non_ip=%llu map_full=%llu parse_err=%llu\n"
-             "rx_pps=%.0f rx_bps=%.0f state=%s drops=%d\n",
+             "rx_pps=%.0f rx_bps=%.0f state=%s prefixes=%d\n",
              (unsigned long long)m.rx_pkts,
              (unsigned long long)m.rx_bytes,
              (unsigned long long)m.passed,

@@ -58,12 +58,12 @@ vg_config_defaults(struct vg_config_file *c)
     memset(c, 0, sizeof(*c));
     snprintf(c->interface, sizeof(c->interface), "eth0");
     snprintf(c->xdp_mode, sizeof(c->xdp_mode), "auto");
-    c->wake_pps = 20000;
-    c->wake_mbps = 1000;
+    c->wake_pps = 2000;
+    c->wake_mbps = 25;
     c->idle_poll_ms = 1000;
     c->clear_seconds = 30;
-    c->threshold_pps = 20000;
-    c->threshold_mbps = 1000;
+    c->threshold_pps = 500;
+    c->threshold_mbps = 5;
     c->ban_time = 1900;
     c->aggregate_k = 8;
     c->metrics_port = 9105;
