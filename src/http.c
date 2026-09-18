@@ -14,16 +14,10 @@
 #include <unistd.h>
 
 
-static void format_prometheus(struct vg_ctrl *c, char *buf, size_t buflen);
-
-
 static void
-format_prometheus(struct vg_ctrl *c, char *buf, size_t buflen)
+format_prometheus(struct vg_ctrl *c, const struct vg_metrics *m, char *buf,
+    size_t buflen)
 {
-    struct vg_metrics  m;
-
-    memset(&m, 0, sizeof(m));
-    vg_metrics_read(c->maps, &m);
     snprintf(buf, buflen,
              "# TYPE voidgate_armed gauge\n"
              "voidgate_armed %d\n"
@@ -40,10 +34,10 @@ format_prometheus(struct vg_ctrl *c, char *buf, size_t buflen)
              "# TYPE voidgate_rx_pps gauge\n"
              "voidgate_rx_pps %.0f\n",
              c->state == VG_ACTIVE ? 1 : 0,
-             (unsigned long long) m.rx_pkts,
-             (unsigned long long) m.rx_bytes,
-             (unsigned long long) m.dropped,
-             (unsigned long long) m.map_full, c->drop_count, c->rx_pps);
+             (unsigned long long) m->rx_pkts,
+             (unsigned long long) m->rx_bytes,
+             (unsigned long long) m->dropped,
+             (unsigned long long) m->map_full, c->drop_count, c->rx_pps);
 }
 
 
@@ -86,6 +80,7 @@ vg_http_listen(int port)
 void
 vg_http_handle(struct vg_ctrl *ctrl, int fd)
 {
+    struct vg_metrics m;
     char req[512], body[4096], resp[4608];
     ssize_t n;
 
@@ -106,7 +101,9 @@ vg_http_handle(struct vg_ctrl *ctrl, int fd)
         return;
     }
 
-    format_prometheus(ctrl, body, sizeof(body));
+    memset(&m, 0, sizeof(m));
+    vg_metrics_read(ctrl->maps, &m);
+    format_prometheus(ctrl, &m, body, sizeof(body));
     snprintf(resp, sizeof(resp),
              "HTTP/1.1 200 OK\r\n"
              "Content-Type: text/plain; version=0.0.4\r\n"
