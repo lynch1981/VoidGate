@@ -3,12 +3,19 @@
 #define _VG_LOG_H_INCLUDED_
 
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
 
 extern int vg_verbose;
+
+struct vg_config_file;
+
+
+void vg_log_config_at(const char *file, int line,
+    const struct vg_config_file *cfg, uint32_t attach_flags);
 
 #define VG_SGR_DIM     "\033[2m"
 #define VG_SGR_CYAN    "\033[36m"
@@ -109,6 +116,8 @@ vg_die_at(const char *file, int line, const char *fmt, ...)
 #define vg_log(...)  vg_log_at(__FILE__, __LINE__, __VA_ARGS__)
 #define vg_warn(...) vg_warn_at(__FILE__, __LINE__, __VA_ARGS__)
 #define vg_die(...)  vg_die_at(__FILE__, __LINE__, __VA_ARGS__)
+#define vg_log_config(cfg, flags) \
+    vg_log_config_at(__FILE__, __LINE__, (cfg), (flags))
 
 #define vg_vlog(...) \
     do { \

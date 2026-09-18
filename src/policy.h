@@ -55,10 +55,6 @@ int vg_ctrl_tick(struct vg_ctrl *c);
 int vg_ctrl_drop(struct vg_ctrl *c, const struct vg_cidr *p, uint32_t reason);
 int vg_ctrl_undrop(struct vg_ctrl *c, const struct vg_cidr *p);
 int vg_ctrl_reload(struct vg_ctrl *c);
-void vg_ctrl_status(struct vg_ctrl *c, char *buf, size_t buflen);
-void vg_ctrl_stats(struct vg_ctrl *c, char *buf, size_t buflen);
-void vg_ctrl_list_drops(struct vg_ctrl *c, char *buf, size_t buflen);
-void vg_ctrl_prometheus(struct vg_ctrl *c, char *buf, size_t buflen);
 
 #if (VG_CTRL_TEST)
 unsigned vg_ctrl_snap_count(const struct vg_ctrl *c);

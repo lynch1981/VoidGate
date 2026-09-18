@@ -21,7 +21,7 @@ BPF_CFLAGS := -O2 -g -target bpf -D__TARGET_ARCH_$(ARCH) \
 		-qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)
 
 USER_OBJS := src/voidgate.o src/config.o src/policy.o src/maps.o src/ipaddr.o \
-	src/log.o
+	src/ctl_server.o src/http.o src/log.o
 CTL_OBJS  := src/voidgatectl.o
 TEST_OBJS := tests/test_xdp.o src/ipaddr.o src/config.o src/log.o
 

@@ -1,35 +1,28 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 #include "config.h"
+#include "ctl_server.h"
+#include "http.h"
 #include "policy.h"
-#include "ipaddr.h"
 #include "log.h"
 #include "maps.h"
 
-#include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <net/if.h>
-#include <netinet/in.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
 #include <sys/time.h>
-#include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
 
 
 static void on_signal(int sig);
 static void sock_timeout(int fd);
-static int listen_unix(const char *path);
-static int listen_http(int port);
-static void handle_ctl(struct vg_ctrl *ctrl, int cfd);
-static void handle_http(struct vg_ctrl *ctrl, int cfd);
 static long elapsed_ms(const struct timespec *a, const struct timespec *b);
 static void usage(const char *argv0);
 
@@ -53,206 +46,6 @@ sock_timeout(int fd)
 }
 
 
-static int
-listen_unix(const char *path)
-{
-    struct sockaddr_un addr;
-    int fd;
-
-    unlink(path);
-    fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-
-    if (fd < 0) {
-        return -1;
-    }
-
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", path);
-
-    if (bind(fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-        close(fd);
-        return -1;
-    }
-
-    chmod(path, 0660);
-
-    if (listen(fd, 16) < 0) {
-        close(fd);
-        return -1;
-    }
-
-    return fd;
-}
-
-
-static int
-listen_http(int port)
-{
-    struct sockaddr_in addr;
-    int fd, one = 1;
-
-    if (port <= 0) {
-        return -1;
-    }
-
-    fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
-
-    if (fd < 0) {
-        return -1;
-    }
-
-    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = htons((uint16_t) port);
-
-    if (bind(fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-        close(fd);
-        return -1;
-    }
-
-    if (listen(fd, 8) < 0) {
-        close(fd);
-        return -1;
-    }
-
-    return fd;
-}
-
-
-static void
-handle_ctl(struct vg_ctrl *ctrl, int cfd)
-{
-    char req[256], reply[8192];
-    ssize_t n;
-    char *nl;
-
-    sock_timeout(cfd);
-    n = read(cfd, req, sizeof(req) - 1);
-
-    if (n <= 0) {
-        return;
-    }
-
-    req[n] = 0;
-    nl = strchr(req, '\n');
-
-    if (nl != NULL) {
-        *nl = 0;
-    }
-
-    reply[0] = 0;
-
-    if (strcmp(req, "status") == 0) {
-        vg_ctrl_status(ctrl, reply, sizeof(reply));
-
-    } else if (strcmp(req, "stats") == 0) {
-        vg_ctrl_stats(ctrl, reply, sizeof(reply));
-
-    } else if (strcmp(req, "drops") == 0) {
-        vg_ctrl_list_drops(ctrl, reply, sizeof(reply));
-
-    } else if (strcmp(req, "arm") == 0) {
-        if (vg_ctrl_arm(ctrl, "ctl") < 0) {
-            snprintf(reply, sizeof(reply), "error: arm failed\n");
-
-        } else {
-            snprintf(reply, sizeof(reply), "ok\n");
-        }
-
-    } else if (strcmp(req, "disarm") == 0) {
-        if (vg_ctrl_disarm(ctrl, "ctl") < 0) {
-            snprintf(reply, sizeof(reply), "error: disarm failed\n");
-
-        } else {
-            snprintf(reply, sizeof(reply), "ok\n");
-        }
-
-    } else if (strncmp(req, "drop ", 5) == 0) {
-        struct vg_cidr p;
-
-        if (vg_parse_cidr(req + 5, &p) < 0) {
-            snprintf(reply, sizeof(reply), "error: bad cidr\n");
-
-        } else if (vg_ctrl_drop(ctrl, &p, VG_REASON_MANUAL) < 0) {
-            snprintf(reply, sizeof(reply),
-                     "error: refused or map update failed\n");
-
-        } else {
-            snprintf(reply, sizeof(reply), "ok\n");
-        }
-
-    } else if (strncmp(req, "undrop ", 7) == 0) {
-        struct vg_cidr p;
-
-        if (vg_parse_cidr(req + 7, &p) < 0) {
-            snprintf(reply, sizeof(reply), "error: bad cidr\n");
-
-        } else {
-            vg_ctrl_undrop(ctrl, &p);
-            snprintf(reply, sizeof(reply), "ok\n");
-        }
-
-    } else if (strcmp(req, "reload") == 0) {
-        if (vg_ctrl_reload(ctrl) < 0) {
-            snprintf(reply, sizeof(reply), "error: reload failed\n");
-
-        } else {
-            snprintf(reply, sizeof(reply), "ok\n");
-        }
-
-    } else {
-        snprintf(reply, sizeof(reply), "error: unknown command\n");
-    }
-
-    if (reply[0]) {
-        ssize_t wr = write(cfd, reply, strlen(reply));
-
-        (void) wr;
-    }
-}
-
-
-static void
-handle_http(struct vg_ctrl *ctrl, int cfd)
-{
-    char req[512], body[4096], resp[4608];
-    ssize_t n;
-
-    sock_timeout(cfd);
-    n = read(cfd, req, sizeof(req) - 1);
-
-    if (n <= 0) {
-        return;
-    }
-
-    req[n] = 0;
-
-    if (strncmp(req, "GET ", 4) != 0 || strstr(req, "/metrics") == NULL) {
-        const char *nf = "HTTP/1.1 404 Not Found\r\n"
-                         "Content-Length: 0\r\nConnection: close\r\n\r\n";
-        ssize_t wr = write(cfd, nf, strlen(nf));
-
-        (void) wr;
-        return;
-    }
-
-    vg_ctrl_prometheus(ctrl, body, sizeof(body));
-    snprintf(resp, sizeof(resp),
-             "HTTP/1.1 200 OK\r\n"
-             "Content-Type: text/plain; version=0.0.4\r\n"
-             "Content-Length: %zu\r\nConnection: close\r\n\r\n%s",
-             strlen(body), body);
-    {
-        ssize_t wr = write(cfd, resp, strlen(resp));
-
-        (void) wr;
-    }
-}
-
-
 static long
 elapsed_ms(const struct timespec *a, const struct timespec *b)
 {
@@ -265,42 +58,6 @@ static void
 usage(const char *argv0)
 {
     fprintf(stderr, "usage: %s [-c config] [-i iface] [-v|-vv]\n", argv0);
-}
-
-
-static void
-log_verbose_config(const struct vg_config_file *cfg,
-    const struct vg_maps *maps)
-{
-    char buf[80];
-    int i;
-
-    vg_vlog("interface %s xdp_mode %s flags 0x%x", cfg->interface,
-            cfg->xdp_mode, maps->attach_flags);
-    vg_vlog("wake_pps=%llu wake_mbps=%llu threshold_pps=%llu "
-            "threshold_mbps=%llu ban_time=%d",
-            (unsigned long long) cfg->wake_pps,
-            (unsigned long long) cfg->wake_mbps,
-            (unsigned long long) cfg->threshold_pps,
-            (unsigned long long) cfg->threshold_mbps, cfg->ban_time);
-    vg_vlog("clear_seconds=%d aggregate_k=%d metrics_port=%d "
-            "remote_map=%u drop_map=%u",
-            cfg->clear_seconds, cfg->aggregate_k, cfg->metrics_port,
-            cfg->remote_map_size, cfg->drop_map_size);
-
-    for (i = 0; i < cfg->local_cidr_count; i++) {
-        vg_cidr_to_str(&cfg->local_cidr[i], buf, sizeof(buf));
-        vg_vlog("local %s", buf);
-    }
-
-    for (i = 0; i < cfg->allow_cidr_count; i++) {
-        vg_cidr_to_str(&cfg->allow_cidr[i], buf, sizeof(buf));
-        vg_vlog("allow %s", buf);
-    }
-
-    for (i = 0; i < cfg->allow_port_count; i++) {
-        vg_vlog("allow_port %u", cfg->allow_ports[i]);
-    }
 }
 
 
@@ -379,7 +136,7 @@ main(int argc, char **argv)
         vg_die("control plane init failed");
     }
 
-    ctl_fd = listen_unix(VG_SOCK_PATH);
+    ctl_fd = vg_ctl_server_listen(VG_SOCK_PATH);
 
     if (ctl_fd < 0) {
         vg_warn("ctl socket %s failed: %s (voidgatectl disabled)",
@@ -389,13 +146,13 @@ main(int argc, char **argv)
         vg_log("ctl socket %s", VG_SOCK_PATH);
     }
 
-    http_fd = listen_http(cfg.metrics_port);
+    http_fd = vg_http_listen(cfg.metrics_port);
 
     if (http_fd >= 0) {
         vg_log("prometheus 127.0.0.1:%d/metrics", cfg.metrics_port);
     }
 
-    log_verbose_config(&cfg, &maps);
+    vg_log_config(&cfg, maps.attach_flags);
     vg_log("idle on %s, wake_pps=%llu wake_mbps=%llu", cfg.interface,
            (unsigned long long)cfg.wake_pps,
            (unsigned long long)cfg.wake_mbps);
@@ -453,11 +210,13 @@ main(int argc, char **argv)
                     continue;
                 }
 
+                sock_timeout(cfd);
+
                 if (pfd[i].fd == ctl_fd) {
-                    handle_ctl(&ctrl, cfd);
+                    vg_ctl_server_handle(&ctrl, cfd);
 
                 } else {
-                    handle_http(&ctrl, cfd);
+                    vg_http_handle(&ctrl, cfd);
                 }
 
                 close(cfd);
